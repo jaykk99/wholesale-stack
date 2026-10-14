@@ -14,6 +14,32 @@ from .scrapers import SCRAPERS, run_scraper
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 app = FastAPI(title="Wholesale Stack")
+
+
+@app.middleware("http")
+async def _vercel_path_fix(request: Request, call_next):
+    """Vercel's rewrite sends the rewritten path (/api/index...); restore the
+    original from the __path query param so routes match. No-op elsewhere."""
+    qp = request.query_params.get("__path")
+    if qp:
+        scope = request.scope
+        scope["path"] = qp
+        scope["raw_path"] = qp.encode()
+        # drop __path from the query string
+        q = "&".join(f"{k}={v}" for k, vs in request.query_params.multi_items()
+                     for v in [vs] if k != "__path")
+        scope["query_string"] = q.encode()
+    elif scope_path := request.scope.get("path", ""):
+        if scope_path == "/api/index":
+            request.scope["path"] = "/"
+            request.scope["raw_path"] = b"/"
+        elif scope_path.startswith("/api/index/"):
+            np = scope_path[len("/api/index"):]
+            request.scope["path"] = np
+            request.scope["raw_path"] = np.encode()
+    return await call_next(request)
+
+
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
