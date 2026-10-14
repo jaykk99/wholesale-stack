@@ -330,3 +330,25 @@ def list_contracts(lead_id: int) -> list[dict]:
         except Exception:
             r["fields"] = {}
     return rows
+
+
+def list_all_contracts() -> list[dict]:
+    if USE_SUPABASE:
+        rows = sb_get(T_CONTRACTS, {"order": "created_at.desc", "limit": "100"})
+    else:
+        conn = _lite()
+        rows = [dict(r) for r in conn.execute(
+            "SELECT * FROM contracts ORDER BY created_at DESC LIMIT 100")]
+        conn.close()
+    for r in rows:
+        try:
+            r["fields"] = json.loads(r.get("fields_json") or "{}")
+        except Exception:
+            r["fields"] = {}
+        # attach lead name for display
+        try:
+            lead = get_lead(r["lead_id"])
+            r["lead_name"] = (lead or {}).get("address") or f"Lead {r['lead_id']}"
+        except Exception:
+            r["lead_name"] = f"Lead {r['lead_id']}"
+    return rows

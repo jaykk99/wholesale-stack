@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Contracts</h1>
+<p class="muted">{{ contracts|length }} saved</p>
+{% if contracts %}
+<div class="cards">
+{% for c in contracts %}
+<a class="card" href="/leads/{{ c.lead_id }}/contracts/{{ c.template_id }}">
+  <div class="card-top"><strong>{{ c.template_id|replace("_"," ")|title }}</strong></div>
+  <div class="muted">{{ c.lead_name }}</div>
+  <div class="muted small">{{ c.created_at[:16] if c.created_at else "" }}</div>
+</a>
+{% endfor %}
+</div>
+{% else %}
+<p class="muted">No contracts yet. Open a lead and create one from the Contracts section.</p>
+{% endif %}
+{% endblock %}

@@ -49,6 +49,8 @@ def _tab_for(path: str) -> str:
         return "scripts"
     if path.startswith("/scrapers"):
         return "tools"
+    if path.startswith("/contracts"):
+        return "contracts"
     if path.startswith("/leads"):
         return "leads"
     return "home"
@@ -152,6 +154,12 @@ async def contract_generate(request: Request, lead_id: int, template_id: str):
     html = contracts.render_contract(tmpl, values)
     return templates.TemplateResponse(request, "contract_print.html", ctx(
         request, lead=lead, tmpl=tmpl, contract_html=html, values=values))
+
+
+@app.get("/contracts", response_class=HTMLResponse)
+def contracts_page(request: Request):
+    allc = db.list_all_contracts()
+    return templates.TemplateResponse(request, "contracts.html", ctx(request, contracts=allc))
 
 
 @app.get("/scrapers", response_class=HTMLResponse)
