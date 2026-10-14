@@ -16,6 +16,17 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 USE_SUPABASE = bool(SUPABASE_URL and SUPABASE_KEY)
 
+# Supabase shares the monico-agent project with other apps, so wholesale tables
+# use a ws_ prefix there. Local SQLite keeps the bare names.
+_P = "ws_" if USE_SUPABASE else ""
+T_LEADS = _P + "leads"
+T_OWNERS = _P + "owners"
+T_DEALS = _P + "deals"
+T_CALLS = _P + "calls"
+T_NOTES = _P + "notes"
+T_STAGE_HISTORY = _P + "stage_history"
+T_CONTRACTS = _P + "contracts"
+
 SQLITE_PATH = os.environ.get("SQLITE_PATH", os.path.join(os.path.dirname(__file__), "..", "wholesale.db"))
 
 STAGES = ["new", "contacted", "appointment", "offer", "negotiation", "closed_won", "closed_lost"]
@@ -112,11 +123,11 @@ def _now() -> float:
 
 def list_leads() -> list[dict]:
     if USE_SUPABASE:
-        leads = sb_get("leads", {"order": "updated_at.desc"})
-        deals = {d["lead_id"]: d for d in sb_get("deals")}
+        leads = sb_get(T_LEADS, {"order": "updated_at.desc"})
+        deals = {d["lead_id"]: d for d in sb_get(T_DEALS)}
         for l in leads:
             l["stage"] = deals.get(l["id"], {}).get("stage", "new")
-            l["owners"] = sb_get("owners", {"lead_id": f"eq.{l['id']}"})
+            l[T_OWNERS] = sb_get(T_OWNERS, {"lead_id": f"eq.{l['id']}"})
         return leads
     conn = _lite()
     rows = conn.execute(
@@ -133,16 +144,16 @@ def list_leads() -> list[dict]:
 
 def get_lead(lead_id: int) -> dict | None:
     if USE_SUPABASE:
-        leads = sb_get("leads", {"id": f"eq.{lead_id}"})
+        leads = sb_get(T_LEADS, {"id": f"eq.{lead_id}"})
         if not leads:
             return None
         lead = leads[0]
-        deals = sb_get("deals", {"lead_id": f"eq.{lead_id}"})
+        deals = sb_get(T_DEALS, {"lead_id": f"eq.{lead_id}"})
         lead["stage"] = deals[0]["stage"] if deals else "new"
         lead["offer_amount"] = deals[0].get("offer_amount") if deals else None
-        lead["owners"] = sb_get("owners", {"lead_id": f"eq.{lead_id}"})
-        lead["calls"] = sb_get("calls", {"lead_id": f"eq.{lead_id}", "order": "called_at.desc"})
-        lead["notes"] = sb_get("notes", {"lead_id": f"eq.{lead_id}", "order": "created_at.desc"})
+        lead[T_OWNERS] = sb_get(T_OWNERS, {"lead_id": f"eq.{lead_id}"})
+        lead[T_CALLS] = sb_get(T_CALLS, {"lead_id": f"eq.{lead_id}", "order": "called_at.desc"})
+        lead[T_NOTES] = sb_get(T_NOTES, {"lead_id": f"eq.{lead_id}", "order": "created_at.desc"})
         lead["contracts"] = list_contracts(lead_id)
         return lead
     conn = _lite()
@@ -177,12 +188,12 @@ def add_lead(data: dict) -> dict:
         "created_at": _now(), "updated_at": _now(),
     }
     if USE_SUPABASE:
-        lead = sb_post("leads", row)
-        sb_post("deals", {"lead_id": lead["id"], "stage": "new", "created_at": _now(), "updated_at": _now()})
+        lead = sb_post(T_LEADS, row)
+        sb_post(T_DEALS, {"lead_id": lead["id"], "stage": "new", "created_at": _now(), "updated_at": _now()})
         owner_name = (data.get("owner_name") or "").strip()
         owner_phone = (data.get("owner_phone") or "").strip()
         if owner_name or owner_phone:
-            sb_post("owners", {"lead_id": lead["id"], "name": owner_name, "phone": owner_phone,
+            sb_post(T_OWNERS, {"lead_id": lead["id"], "name": owner_name, "phone": owner_phone,
                                "email": (data.get("owner_email") or "").strip()})
         lead["stage"] = "new"
         return lead
@@ -217,13 +228,13 @@ def move_stage(lead_id: int, to_stage: str) -> dict | None:
         return None
     from_stage = lead.get("stage", "new")
     if USE_SUPABASE:
-        deals = sb_get("deals", {"lead_id": f"eq.{lead_id}"})
+        deals = sb_get(T_DEALS, {"lead_id": f"eq.{lead_id}"})
         if deals:
-            sb_patch("deals", {"lead_id": lead_id}, {"stage": to_stage, "updated_at": _now()})
+            sb_patch(T_DEALS, {"lead_id": lead_id}, {"stage": to_stage, "updated_at": _now()})
         else:
-            sb_post("deals", {"lead_id": lead_id, "stage": to_stage, "created_at": _now(), "updated_at": _now()})
-        sb_post("stage_history", {"lead_id": lead_id, "from_stage": from_stage, "to_stage": to_stage, "changed_at": _now()})
-        sb_patch("leads", {"id": lead_id}, {"updated_at": _now()})
+            sb_post(T_DEALS, {"lead_id": lead_id, "stage": to_stage, "created_at": _now(), "updated_at": _now()})
+        sb_post(T_STAGE_HISTORY, {"lead_id": lead_id, "from_stage": from_stage, "to_stage": to_stage, "changed_at": _now()})
+        sb_patch(T_LEADS, {"id": lead_id}, {"updated_at": _now()})
     else:
         conn = _lite()
         conn.execute("INSERT OR IGNORE INTO deals (lead_id, stage, created_at, updated_at) VALUES (?,?,?,?)",
@@ -241,7 +252,7 @@ def log_call(lead_id: int, outcome: str, notes: str, duration_min: int = 0) -> d
     row = {"lead_id": lead_id, "outcome": outcome, "notes": notes,
            "duration_min": duration_min, "called_at": _now()}
     if USE_SUPABASE:
-        return sb_post("calls", row)
+        return sb_post(T_CALLS, row)
     conn = _lite()
     cur = conn.execute("INSERT INTO calls (lead_id, outcome, notes, duration_min, called_at) VALUES (?,?,?,?,?)",
                        (lead_id, outcome, notes, duration_min, _now()))
@@ -256,7 +267,7 @@ def log_call(lead_id: int, outcome: str, notes: str, duration_min: int = 0) -> d
 def add_note(lead_id: int, body: str) -> dict:
     row = {"lead_id": lead_id, "body": body, "created_at": _now()}
     if USE_SUPABASE:
-        return sb_post("notes", row)
+        return sb_post(T_NOTES, row)
     conn = _lite()
     cur = conn.execute("INSERT INTO notes (lead_id, body, created_at) VALUES (?,?,?)", (lead_id, body, _now()))
     nid = cur.lastrowid
@@ -289,7 +300,7 @@ def save_contract(lead_id: int, template_id: str, fields: dict) -> dict:
     payload = json.dumps(fields)
     row = {"lead_id": lead_id, "template_id": template_id, "fields_json": payload, "created_at": _now()}
     if USE_SUPABASE:
-        return sb_post("contracts", row)
+        return sb_post(T_CONTRACTS, row)
     conn = _lite()
     cur = conn.execute("INSERT INTO contracts (lead_id, template_id, fields_json, created_at) VALUES (?,?,?,?)",
                        (lead_id, template_id, payload, _now()))
@@ -303,7 +314,7 @@ def save_contract(lead_id: int, template_id: str, fields: dict) -> dict:
 
 def list_contracts(lead_id: int) -> list[dict]:
     if USE_SUPABASE:
-        rows = sb_get("contracts", {"lead_id": f"eq.{lead_id}", "order": "created_at.desc"})
+        rows = sb_get(T_CONTRACTS, {"lead_id": f"eq.{lead_id}", "order": "created_at.desc"})
     else:
         conn = _lite()
         rows = [dict(r) for r in conn.execute(
