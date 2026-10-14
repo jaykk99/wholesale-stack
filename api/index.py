@@ -1,33 +1,14 @@
 """Vercel serverless entrypoint.
 
-Wraps the FastAPI app with Mangum so it runs as a Vercel Serverless
-Function. Both `app` (native ASGI) and `handler` (Mangum) are exported;
-Vercel picks up whichever its Python runtime prefers.
-
-Notes for serverless:
-- The Supabase backend is used when SUPABASE_URL / SUPABASE_KEY are set
-  (set them in the Vercel dashboard). The local SQLite fallback is not
-  usable on Vercel's read-only filesystem.
-- The background scheduler only starts when ENABLE_SCHEDULER=1, which
-  is never set on Vercel, so no background threads run here.
-- Long scrapes may exceed the serverless function timeout; run heavy
-  scrapers from the /scrapers page in small batches.
+Exports the FastAPI app directly as an ASGI app — Vercel's Python runtime
+serves it natively. The vercel.json rewrite sends every path here; the
+wrapper strips the /api/index prefix so routes see the original path.
 """
-import os
-import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from mangum import Mangum  # noqa: E402
-
-from app.main import app as fastapi_app  # noqa: E402
+from app.main import app as fastapi_app
 
 
 async def app(scope, receive, send):
-    """ASGI wrapper: Vercel's rewrite sends the rewritten path (/api/index...).
-
-    Strip the /api/index prefix so the FastAPI routes see the original path.
-    """
     if scope["type"] == "http":
         path = scope.get("path", "")
         if path == "/api/index":
@@ -36,6 +17,3 @@ async def app(scope, receive, send):
             new_path = path[len("/api/index"):]
             scope = {**scope, "path": new_path, "raw_path": new_path.encode()}
     await fastapi_app(scope, receive, send)
-
-
-handler = Mangum(fastapi_app, lifespan="off")
