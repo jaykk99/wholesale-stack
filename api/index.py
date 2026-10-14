@@ -20,6 +20,22 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mangum import Mangum  # noqa: E402
 
-from app.main import app  # noqa: E402
+from app.main import app as fastapi_app  # noqa: E402
 
-handler = Mangum(app, lifespan="off")
+
+async def app(scope, receive, send):
+    """ASGI wrapper: Vercel's rewrite sends the rewritten path (/api/index...).
+
+    Strip the /api/index prefix so the FastAPI routes see the original path.
+    """
+    if scope["type"] == "http":
+        path = scope.get("path", "")
+        if path == "/api/index":
+            scope = {**scope, "path": "/", "raw_path": b"/"}
+        elif path.startswith("/api/index/"):
+            new_path = path[len("/api/index"):]
+            scope = {**scope, "path": new_path, "raw_path": new_path.encode()}
+    await fastapi_app(scope, receive, send)
+
+
+handler = Mangum(fastapi_app, lifespan="off")
