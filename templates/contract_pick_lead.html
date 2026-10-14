@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ tmpl.title }} - pick a lead{% endblock %}
+{% block content %}
+<h1>{{ tmpl.title }}</h1>
+<div class="card">
+  <p style="margin-top:0"><strong>When to use this:</strong></p>
+  <p class="muted">{{ tmpl.when_to_use }}</p>
+</div>
+<h2>Pick a lead</h2>
+{% if leads %}
+<div class="cards">
+{% for l in leads %}
+<a class="card" href="/leads/{{ l.id }}/contracts/{{ tmpl.id }}">
+  <div class="card-top"><strong>{{ l.address }}</strong></div>
+  <div class="muted">{{ l.city or "" }}</div>
+  <div class="muted small">{{ (l.owners[0].name if l.owners else "") or "no owner on file" }}</div>
+</a>
+{% endfor %}
+</div>
+{% else %}
+<p class="muted">No leads yet. <a href="/leads/new">Add a lead</a> first.</p>
+{% endif %}
+{% endblock %}

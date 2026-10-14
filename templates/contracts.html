@@ -1,8 +1,26 @@
 {% extends "base.html" %}
+{% block title %}Contract Library - Wholesale Deals{% endblock %}
 {% block content %}
-<h1>Contracts</h1>
-<p class="muted">{{ contracts|length }} saved</p>
+<h1>Contract Library</h1>
+<p class="muted">{{ template_count }} templates. Pick a contract, pick a lead, fill in the blanks, print.</p>
+
+{% for cat, tmpls in grouped.items() %}
+<h2 style="margin-top:1.5rem">{{ cat }}</h2>
+<div class="cards">
+{% for t in tmpls %}
+<div class="card">
+  <div class="card-top"><strong>{{ t.title }}</strong></div>
+  <p class="muted small" style="margin:.5rem 0">{{ t.when_to_use }}</p>
+  <p class="muted small" style="margin-bottom:.75rem">{{ t.fields|length }} fill-in fields. Auto-fills from the lead.</p>
+  <a class="btn" href="/contracts/new/{{ t.id }}">Use this template</a>
+</div>
+{% endfor %}
+</div>
+{% endfor %}
+
 {% if contracts %}
+<h2 style="margin-top:2rem">Saved contracts</h2>
+<p class="muted">{{ contracts|length }} saved</p>
 <div class="cards">
 {% for c in contracts %}
 <a class="card" href="/leads/{{ c.lead_id }}/contracts/{{ c.template_id }}">
@@ -13,6 +31,8 @@
 {% endfor %}
 </div>
 {% else %}
-<p class="muted">No contracts yet. Open a lead and create one from the Contracts section.</p>
+<p class="muted" style="margin-top:2rem">No saved contracts yet. Pick a template above and create one from a lead.</p>
 {% endif %}
+
+<p class="muted small" style="margin-top:2rem">Templates only, not legal advice. Have a local real estate attorney review every document before use.</p>
 {% endblock %}

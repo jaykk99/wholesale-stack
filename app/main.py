@@ -169,7 +169,20 @@ async def contract_generate(request: Request, lead_id: int, template_id: str):
 @app.get("/contracts", response_class=HTMLResponse)
 def contracts_page(request: Request):
     allc = db.list_all_contracts()
-    return templates.TemplateResponse(request, "contracts.html", ctx(request, contracts=allc))
+    return templates.TemplateResponse(request, "contracts.html", ctx(
+        request, contracts=allc,
+        grouped=contracts.templates_by_category(),
+        template_count=len(contracts.TEMPLATES)))
+
+
+@app.get("/contracts/new/{template_id}", response_class=HTMLResponse)
+def contract_pick_lead(request: Request, template_id: str):
+    tmpl = contracts.get_template(template_id)
+    if not tmpl:
+        return HTMLResponse("Not found", status_code=404)
+    leads = db.list_leads()
+    return templates.TemplateResponse(request, "contract_pick_lead.html", ctx(
+        request, tmpl=tmpl, leads=leads))
 
 
 @app.get("/playbook", response_class=HTMLResponse)

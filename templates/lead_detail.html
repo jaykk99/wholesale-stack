@@ -62,7 +62,10 @@
 <h2>Contracts</h2>
 <div class="card">
 {% for t in contract_templates %}
-  <a class="btn" href="/leads/{{ lead.id }}/contracts/{{ t.id }}">{{ t.title }}</a>
+  <div style="margin-bottom:.75rem">
+    <a class="btn" href="/leads/{{ lead.id }}/contracts/{{ t.id }}">{{ t.title }}</a>
+    <p class="muted small" style="margin:.25rem 0 0">{{ t.when_to_use }}</p>
+  </div>
 {% endfor %}
 {% if lead.contracts %}
 <ul class="clist">

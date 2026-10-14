@@ -2,7 +2,10 @@
 {% block title %}{{ tmpl.title }} - Wholesale Deals{% endblock %}
 {% block content %}
 <h1>{{ tmpl.title }}</h1>
-<p class="muted">{{ tmpl.description }}</p>
+<div class="card">
+  <p style="margin-top:0"><strong>When to use this:</strong></p>
+  <p class="muted">{{ tmpl.when_to_use }}</p>
+</div>
 <div class="card">
   <p style="margin-top:0">For: <strong>{{ lead.address }}</strong></p>
   <p class="muted">Fields are pre-filled from the deal where possible. Review everything before printing. These are templates, not legal advice.</p>
