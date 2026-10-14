@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from . import db
-from . import call_scripts, contracts
+from . import call_scripts, contracts, exits
 from .scrapers import SCRAPERS, run_scraper
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -51,6 +51,8 @@ def _tab_for(path: str) -> str:
         return "tools"
     if path.startswith("/contracts"):
         return "contracts"
+    if path.startswith("/buyers"):
+        return "buyers"
     if path.startswith("/playbook"):
         return "tools"
     if path.startswith("/leads"):
@@ -101,6 +103,10 @@ def lead_detail(request: Request, lead_id: int):
         contract_templates=contracts.TEMPLATES,
         deal_type=dt,
         payout=db.payout_estimate(lead),
+        matched_buyers=db.match_buyers(lead),
+        outreach=db.buyer_outreach_for_lead(lead_id),
+        exits=exits.exit_strategies(lead),
+        buyers_ready=db.buyers_ready(),
     ))
 
 
@@ -222,6 +228,72 @@ async def run_scraper_endpoint(request: Request, name: str):
 @app.get("/health")
 def health():
     return {"ok": True, "backend": db.backend_name(), "scrapers": list(SCRAPERS.keys())}
+
+
+# ---------------- Buyers CRM ----------------
+
+@app.get("/buyers", response_class=HTMLResponse)
+def buyers_page(request: Request):
+    return templates.TemplateResponse(request, "buyers.html", ctx(
+        request, buyers=db.list_buyers(), buyers_ready=db.buyers_ready(),
+        buyer_types=db.BUYER_TYPES))
+
+
+@app.get("/buyers/new", response_class=HTMLResponse)
+def new_buyer_form(request: Request):
+    return templates.TemplateResponse(request, "buyer_form.html", ctx(
+        request, buyer=None, buyer_types=db.BUYER_TYPES))
+
+
+@app.post("/buyers/new")
+def create_buyer(
+    name: str = Form(...), phone: str = Form(""), email: str = Form(""),
+    company: str = Form(""), buyer_type: str = Form("cash_buyer"),
+    target_areas: str = Form(""), min_price: str = Form(""), max_price: str = Form(""),
+    property_types: str = Form(""), notes: str = Form(""),
+):
+    b = db.add_buyer({"name": name, "phone": phone, "email": email, "company": company,
+                      "buyer_type": buyer_type, "target_areas": target_areas,
+                      "min_price": min_price, "max_price": max_price,
+                      "property_types": property_types, "notes": notes})
+    if b:
+        return RedirectResponse(f"/buyers/{b['id']}", status_code=303)
+    return RedirectResponse("/buyers", status_code=303)
+
+
+@app.get("/buyers/{buyer_id}", response_class=HTMLResponse)
+def buyer_detail(request: Request, buyer_id: int):
+    b = db.get_buyer(buyer_id)
+    if not b:
+        return HTMLResponse("Buyer not found", status_code=404)
+    return templates.TemplateResponse(request, "buyer_form.html", ctx(
+        request, buyer=b, buyer_types=db.BUYER_TYPES))
+
+
+@app.post("/buyers/{buyer_id}/edit")
+def edit_buyer(
+    buyer_id: int, name: str = Form(...), phone: str = Form(""), email: str = Form(""),
+    company: str = Form(""), buyer_type: str = Form("cash_buyer"),
+    target_areas: str = Form(""), min_price: str = Form(""), max_price: str = Form(""),
+    property_types: str = Form(""), notes: str = Form(""),
+):
+    db.update_buyer(buyer_id, {"name": name, "phone": phone, "email": email, "company": company,
+                               "buyer_type": buyer_type, "target_areas": target_areas,
+                               "min_price": min_price, "max_price": max_price,
+                               "property_types": property_types, "notes": notes})
+    return RedirectResponse(f"/buyers/{buyer_id}", status_code=303)
+
+
+@app.post("/buyers/{buyer_id}/delete")
+def remove_buyer(buyer_id: int):
+    db.delete_buyer(buyer_id)
+    return RedirectResponse("/buyers", status_code=303)
+
+
+@app.post("/leads/{lead_id}/buyers/{buyer_id}/contact")
+def contact_buyer(lead_id: int, buyer_id: int, channel: str = Form("call")):
+    db.log_buyer_contact(lead_id, buyer_id, channel)
+    return RedirectResponse(f"/leads/{lead_id}", status_code=303)
 
 
 # ---------- built-in fallback scheduler (no-Docker mode) ----------

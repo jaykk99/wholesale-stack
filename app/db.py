@@ -26,6 +26,8 @@ T_CALLS = _P + "calls"
 T_NOTES = _P + "notes"
 T_STAGE_HISTORY = _P + "stage_history"
 T_CONTRACTS = _P + "contracts"
+T_BUYERS = _P + "buyers"
+T_BUYER_OUTREACH = _P + "buyer_outreach"
 
 SQLITE_PATH = os.environ.get("SQLITE_PATH", os.path.join(os.path.dirname(__file__), "..", "wholesale.db"))
 
@@ -158,6 +160,17 @@ CREATE TABLE IF NOT EXISTS stage_history (
 CREATE TABLE IF NOT EXISTS contracts (
   id INTEGER PRIMARY KEY AUTOINCREMENT, lead_id INTEGER NOT NULL,
   template_id TEXT NOT NULL, fields_json TEXT DEFAULT '{}', created_at REAL
+);
+CREATE TABLE IF NOT EXISTS buyers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
+  phone TEXT DEFAULT '', email TEXT DEFAULT '', company TEXT DEFAULT '',
+  buyer_type TEXT DEFAULT 'cash_buyer', target_areas TEXT DEFAULT '',
+  min_price REAL, max_price REAL, property_types TEXT DEFAULT '',
+  notes TEXT DEFAULT '', created_at REAL, updated_at REAL
+);
+CREATE TABLE IF NOT EXISTS buyer_outreach (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, lead_id INTEGER NOT NULL,
+  buyer_id INTEGER NOT NULL, channel TEXT DEFAULT 'call', contacted_at REAL
 );
 """
 
@@ -406,3 +419,251 @@ def list_all_contracts() -> list[dict]:
         except Exception:
             r["lead_name"] = f"Lead {r['lead_id']}"
     return rows
+
+
+# ---------------- Buyers CRM ----------------
+
+BUYER_TYPES = {
+    "cash_buyer": "Cash Buyer",
+    "landlord": "Landlord",
+    "flipper": "Flipper",
+    "hedge_fund": "Hedge Fund / iBuyer",
+    "realtor_investor": "Investor Realtor",
+    "other": "Other",
+}
+
+_buyers_ready: bool | None = None
+
+
+def buyers_ready() -> bool:
+    """True when the buyers tables exist (migration 0002 applied). Cached."""
+    global _buyers_ready
+    if _buyers_ready is not None:
+        return _buyers_ready
+    if USE_SUPABASE:
+        try:
+            sb_get(T_BUYERS, {"limit": "1"})
+            _buyers_ready = True
+        except Exception:
+            _buyers_ready = False
+    else:
+        _buyers_ready = True  # sqlite schema auto-creates
+    return _buyers_ready
+
+
+def list_buyers() -> list[dict]:
+    if not buyers_ready():
+        return []
+    if USE_SUPABASE:
+        try:
+            return sb_get(T_BUYERS, {"order": "name.asc"})
+        except Exception:
+            return []
+    conn = _lite()
+    rows = [dict(r) for r in conn.execute("SELECT * FROM buyers ORDER BY name")]
+    conn.close()
+    return rows
+
+
+def get_buyer(buyer_id: int) -> dict | None:
+    if not buyers_ready():
+        return None
+    if USE_SUPABASE:
+        try:
+            rows = sb_get(T_BUYERS, {"id": f"eq.{buyer_id}"})
+        except Exception:
+            return None
+        return rows[0] if rows else None
+    conn = _lite()
+    row = conn.execute("SELECT * FROM buyers WHERE id=?", (buyer_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def add_buyer(data: dict) -> dict | None:
+    if not buyers_ready():
+        return None
+    row = {
+        "name": (data.get("name") or "").strip(),
+        "phone": (data.get("phone") or "").strip(),
+        "email": (data.get("email") or "").strip(),
+        "company": (data.get("company") or "").strip(),
+        "buyer_type": data.get("buyer_type") or "cash_buyer",
+        "target_areas": (data.get("target_areas") or "").strip(),
+        "min_price": _num(data.get("min_price")),
+        "max_price": _num(data.get("max_price")),
+        "property_types": (data.get("property_types") or "").strip(),
+        "notes": (data.get("notes") or "").strip(),
+        "created_at": _now(), "updated_at": _now(),
+    }
+    if USE_SUPABASE:
+        return sb_post(T_BUYERS, row)
+    conn = _lite()
+    cur = conn.execute(
+        """INSERT INTO buyers (name, phone, email, company, buyer_type, target_areas,
+                               min_price, max_price, property_types, notes, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (row["name"], row["phone"], row["email"], row["company"], row["buyer_type"],
+         row["target_areas"], row["min_price"], row["max_price"], row["property_types"],
+         row["notes"], row["created_at"], row["updated_at"]))
+    bid = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return get_buyer(bid)
+
+
+def update_buyer(buyer_id: int, data: dict) -> dict | None:
+    if not buyers_ready():
+        return None
+    row = {
+        "name": (data.get("name") or "").strip(),
+        "phone": (data.get("phone") or "").strip(),
+        "email": (data.get("email") or "").strip(),
+        "company": (data.get("company") or "").strip(),
+        "buyer_type": data.get("buyer_type") or "cash_buyer",
+        "target_areas": (data.get("target_areas") or "").strip(),
+        "min_price": _num(data.get("min_price")),
+        "max_price": _num(data.get("max_price")),
+        "property_types": (data.get("property_types") or "").strip(),
+        "notes": (data.get("notes") or "").strip(),
+        "updated_at": _now(),
+    }
+    if USE_SUPABASE:
+        sb_patch(T_BUYERS, {"id": buyer_id}, row)
+    else:
+        conn = _lite()
+        conn.execute(
+            """UPDATE buyers SET name=?, phone=?, email=?, company=?, buyer_type=?,
+                                target_areas=?, min_price=?, max_price=?, property_types=?,
+                                notes=?, updated_at=? WHERE id=?""",
+            (row["name"], row["phone"], row["email"], row["company"], row["buyer_type"],
+             row["target_areas"], row["min_price"], row["max_price"], row["property_types"],
+             row["notes"], row["updated_at"], buyer_id))
+        conn.commit()
+        conn.close()
+    return get_buyer(buyer_id)
+
+
+def delete_buyer(buyer_id: int) -> None:
+    if not buyers_ready():
+        return
+    if USE_SUPABASE:
+        try:
+            httpx.delete(f"{SUPABASE_URL}/rest/v1/{T_BUYER_OUTREACH}",
+                         headers=_sb_headers(), params={"buyer_id": f"eq.{buyer_id}"}, timeout=20)
+            httpx.delete(f"{SUPABASE_URL}/rest/v1/{T_BUYERS}",
+                         headers=_sb_headers(), params={"id": f"eq.{buyer_id}"}, timeout=20)
+        except Exception:
+            pass
+    else:
+        conn = _lite()
+        conn.execute("DELETE FROM buyer_outreach WHERE buyer_id=?", (buyer_id,))
+        conn.execute("DELETE FROM buyers WHERE id=?", (buyer_id,))
+        conn.commit()
+        conn.close()
+
+
+def _csv_match(needles: str, haystack_csv: str) -> bool:
+    """True if any comma-separated needle appears in the haystack csv (case-insensitive)."""
+    if not haystack_csv or not haystack_csv.strip():
+        return True  # no preference = matches everything
+    hay = haystack_csv.lower()
+    for n in (needles or "").split(","):
+        n = n.strip().lower()
+        if n and n in hay:
+            return True
+    return False
+
+
+def match_buyers(lead: dict) -> list[dict]:
+    """Buyers whose criteria fit this property. Sorted best-first."""
+    buyers = list_buyers()
+    if not buyers:
+        return []
+    try:
+        price = float(lead.get("asking_price") or 0)
+    except (TypeError, ValueError):
+        price = 0
+    city = (lead.get("city") or "").lower()
+    ptype = (lead.get("motivation") or "").lower()
+    scored = []
+    for b in buyers:
+        score = 0
+        reasons = []
+        # price
+        try:
+            lo = float(b.get("min_price")) if b.get("min_price") is not None else None
+        except (TypeError, ValueError):
+            lo = None
+        try:
+            hi = float(b.get("max_price")) if b.get("max_price") is not None else None
+        except (TypeError, ValueError):
+            hi = None
+        if price and (lo is not None or hi is not None):
+            if lo is not None and price < lo:
+                continue
+            if hi is not None and price > hi:
+                continue
+            score += 2
+            reasons.append("price fits")
+        # area
+        areas = (b.get("target_areas") or "").strip()
+        if areas:
+            if not city or not _csv_match(city, areas):
+                continue
+            score += 2
+            reasons.append("buys in this area")
+        # property type
+        ptypes = (b.get("property_types") or "").strip()
+        if ptypes:
+            if not ptype or not _csv_match(ptype, ptypes):
+                continue
+            score += 1
+            reasons.append("wants this deal type")
+        scored.append((score, b, reasons))
+    scored.sort(key=lambda x: (-x[0], (x[1].get("name") or "").lower()))
+    out = []
+    for score, b, reasons in scored:
+        b = dict(b)
+        b["match_reasons"] = reasons or ["no filters set"]
+        out.append(b)
+    return out
+
+
+def log_buyer_contact(lead_id: int, buyer_id: int, channel: str = "call") -> dict | None:
+    if not buyers_ready():
+        return None
+    row = {"lead_id": lead_id, "buyer_id": buyer_id, "channel": channel, "contacted_at": _now()}
+    if USE_SUPABASE:
+        try:
+            return sb_post(T_BUYER_OUTREACH, row)
+        except Exception:
+            return None
+    conn = _lite()
+    cur = conn.execute("INSERT INTO buyer_outreach (lead_id, buyer_id, channel, contacted_at) VALUES (?,?,?,?)",
+                       (lead_id, buyer_id, channel, _now()))
+    oid = cur.lastrowid
+    conn.commit()
+    conn.close()
+    row["id"] = oid
+    return row
+
+
+def buyer_outreach_for_lead(lead_id: int) -> dict[int, list[dict]]:
+    """buyer_id -> list of outreach rows, newest first."""
+    if not buyers_ready():
+        return {}
+    if USE_SUPABASE:
+        try:
+            rows = sb_get(T_BUYER_OUTREACH, {"lead_id": f"eq.{lead_id}", "order": "contacted_at.desc"})
+        except Exception:
+            return {}
+    else:
+        conn = _lite()
+        rows = [dict(r) for r in conn.execute(
+            "SELECT * FROM buyer_outreach WHERE lead_id=? ORDER BY contacted_at DESC", (lead_id,))]
+        conn.close()
+    grouped: dict[int, list[dict]] = {}
+    for r in rows:
+        grouped.setdefault(r["buyer_id"], []).append(r)
+    return grouped

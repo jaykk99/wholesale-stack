@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}{% if buyer %}Edit {{ buyer.name }}{% else %}Add buyer{% endif %} - Wholesale Deals{% endblock %}
+{% block content %}
+<h1>{% if buyer %}Edit buyer{% else %}Add buyer{% endif %}</h1>
+
+<form method="post" action="{% if buyer %}/buyers/{{ buyer.id }}/edit{% else %}/buyers/new{% endif %}" class="form card">
+  <label>Name
+    <input name="name" required value="{{ buyer.name if buyer else '' }}" placeholder="Full name">
+  </label>
+  <label>Company
+    <input name="company" value="{{ buyer.company if buyer else '' }}" placeholder="Company (optional)">
+  </label>
+  <label>Phone
+    <input name="phone" value="{{ buyer.phone if buyer else '' }}" inputmode="tel" placeholder="204-555-1234">
+  </label>
+  <label>Email
+    <input name="email" type="email" value="{{ buyer.email if buyer else '' }}" placeholder="buyer@email.com">
+  </label>
+  <label>Buyer type
+    <select name="buyer_type">
+      {% for k, v in buyer_types.items() %}
+      <option value="{{ k }}" {% if buyer and buyer.buyer_type == k %}selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Target areas (comma separated)
+    <input name="target_areas" value="{{ buyer.target_areas if buyer else '' }}" placeholder="Winnipeg, St. Boniface, Transcona">
+  </label>
+  <div style="display:flex;gap:.75rem">
+    <label style="flex:1">Min price
+      <input name="min_price" type="number" min="0" value="{{ buyer.min_price if buyer and buyer.min_price else '' }}" inputmode="numeric" placeholder="50000">
+    </label>
+    <label style="flex:1">Max price
+      <input name="max_price" type="number" min="0" value="{{ buyer.max_price if buyer and buyer.max_price else '' }}" inputmode="numeric" placeholder="300000">
+    </label>
+  </div>
+  <label>Property types they want (comma separated)
+    <input name="property_types" value="{{ buyer.property_types if buyer else '' }}" placeholder="probate, pre_foreclosure, standard">
+  </label>
+  <label>Notes
+    <textarea name="notes" rows="2" placeholder="Closes fast, likes bungalows...">{{ buyer.notes if buyer else '' }}</textarea>
+  </label>
+  <button class="btn big primary" type="submit">{% if buyer %}Save changes{% else %}Add buyer{% endif %}</button>
+</form>
+
+{% if buyer %}
+<form method="post" action="/buyers/{{ buyer.id }}/delete" class="form card" onsubmit="return confirm('Delete this buyer?')">
+  <button class="btn" type="submit" style="color:#a00">Delete buyer</button>
+</form>
+{% endif %}
+
+<p><a href="/buyers">&larr; Back to buyers</a></p>
+{% endblock %}

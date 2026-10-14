@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Cash Buyers - Wholesale Deals{% endblock %}
+{% block content %}
+<h1>Cash Buyers</h1>
+<p class="muted">Your buyer list. Add every investor you meet. They get matched to each property automatically.</p>
+
+{% if not buyers_ready %}
+<div class="card" style="border-left:4px solid #c90">
+  <strong>Database setup needed.</strong>
+  <p class="muted" style="margin:.4rem 0 0">Run <code>supabase/migrations/0002_buyers.sql</code> once in the Supabase SQL editor to turn on the buyers list.</p>
+</div>
+{% endif %}
+
+<p><a class="btn big primary" href="/buyers/new">+ Add buyer</a></p>
+
+{% for b in buyers %}
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem">
+    <div>
+      <strong><a href="/buyers/{{ b.id }}">{{ b.name }}</a></strong>
+      {% if b.company %}<span class="muted"> &middot; {{ b.company }}</span>{% endif %}
+      <div class="muted small">{{ buyer_types.get(b.buyer_type, b.buyer_type) }}
+        {% if b.target_areas %} &middot; {{ b.target_areas }}{% endif %}
+        {% if b.min_price or b.max_price %} &middot; {{ "$%.0f"|format(b.min_price) if b.min_price else "$0" }} - {{ "$%.0f"|format(b.max_price) if b.max_price else "no max" }}{% endif %}
+      </div>
+    </div>
+    {% set tel = (b.phone or '')|replace(' ', '')|replace('-', '')|replace('(', '')|replace(')', '') %}
+    {% if b.phone %}
+    <div class="callrow" style="flex-shrink:0">
+      <a class="btn call" href="tel:{{ tel }}">&#9742;</a>
+      <a class="btn text" href="sms:{{ tel }}">&#9993;</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+<p class="muted">No buyers yet. Add your first cash buyer above.</p>
+{% endfor %}
+{% endblock %}

@@ -39,6 +39,71 @@
   {% if lead.source_url %}<p style="margin-bottom:0"><a href="{{ lead.source_url }}" target="_blank" rel="noopener">View original listing</a></p>{% endif %}
 </div>
 
+<h2>Sell: matched buyers</h2>
+{% if not buyers_ready %}
+<div class="card" style="border-left:4px solid #c90">
+  <strong>Buyer list not set up yet.</strong>
+  <p class="muted" style="margin:.4rem 0 0">Run <code>supabase/migrations/0002_buyers.sql</code> in the Supabase SQL editor, then add buyers on the <a href="/buyers">Buyers tab</a>.</p>
+</div>
+{% elif matched_buyers %}
+{% for b in matched_buyers %}
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem">
+    <div>
+      <strong>{{ b.name }}</strong>
+      {% if b.company %}<span class="muted"> &middot; {{ b.company }}</span>{% endif %}
+      <div class="muted small">{{ b.match_reasons|join(" &middot; ") }}</div>
+      {% set contacted = outreach.get(b.id) %}
+      {% if contacted %}
+      <div class="small" style="color:green;margin-top:.25rem">&#10003; Contacted ({{ contacted[0].channel }})</div>
+      {% endif %}
+    </div>
+    <div style="flex-shrink:0;text-align:right">
+      {% set tel = (b.phone or '')|replace(' ', '')|replace('-', '')|replace('(', '')|replace(')', '') %}
+      {% if b.phone %}
+      <div class="callrow" style="margin-bottom:.4rem">
+        <a class="btn call" href="tel:{{ tel }}">&#9742; Call</a>
+        <a class="btn text" href="sms:{{ tel }}">&#9993; Text</a>
+      </div>
+      {% endif %}
+      {% if b.email %}<div><a class="btn" href="mailto:{{ b.email }}?subject=Deal: {{ lead.address }}">&#9993; Email</a></div>{% endif %}
+      <form method="post" action="/leads/{{ lead.id }}/buyers/{{ b.id }}/contact" style="margin-top:.4rem">
+        <select name="channel" class="small" style="font-size:.8rem;padding:.2rem">
+          <option value="call">Call</option><option value="text">Text</option><option value="email">Email</option>
+        </select>
+        <button class="btn small" type="submit">Log contact</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% else %}
+<p class="muted">No buyers match this property yet. <a href="/buyers/new">Add a buyer</a> or <a href="/buyers">open the buyer list</a>.</p>
+{% endif %}
+
+<h2>Sell: exit strategies</h2>
+<p class="muted">Every way to make money on this house, with the math for this deal.</p>
+{% for e in exits %}
+<details class="card" {% if loop.first and e.ready %}open{% endif %}>
+  <summary><strong>{{ e.title }}</strong>
+    {% set profit_row = e.math[-1] %}
+    <br><span class="muted">Profit: {{ profit_row[1] }}</span>
+    {% if not e.ready %}<span class="muted"> &middot; needs numbers</span>{% endif %}
+  </summary>
+  <p>{{ e.how }}</p>
+  <table style="width:100%;font-size:.9rem;margin:.5rem 0">
+    {% for label, val in e.math %}
+    <tr><td class="muted">{{ label }}</td><td style="text-align:right"><strong>{{ val }}</strong></td></tr>
+    {% endfor %}
+  </table>
+  <p class="small" style="margin:.4rem 0"><strong>Pros:</strong> {{ e.pros|join("; ") }}</p>
+  <p class="small muted" style="margin:.4rem 0"><strong>Cons:</strong> {{ e.cons|join("; ") }}</p>
+  <p style="margin-bottom:0"><a class="btn" href="/leads/{{ lead.id }}/contracts/{{ e.contract_id }}">Use this contract</a></p>
+</details>
+{% else %}
+<p class="muted">Add an ARV estimate to see exit strategy math.</p>
+{% endfor %}
+
 <h2>Stage: {{ stage_labels.get(lead.stage, lead.stage) }}</h2>
 <form method="post" action="/leads/{{ lead.id }}/stage">
   <div class="stepper">
