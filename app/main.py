@@ -60,7 +60,8 @@ def _tab_for(path: str) -> str:
 
 def ctx(request: Request, **kw):
     base = {"request": request, "stages": db.STAGES, "stage_labels": db.STAGE_LABELS,
-            "backend": db.backend_name(), "tab": _tab_for(request.url.path)}
+            "backend": db.backend_name(), "tab": _tab_for(request.url.path),
+            "deal_types": db.DEAL_TYPES}
     base.update(kw)
     return base
 
@@ -76,6 +77,10 @@ def leads_page(request: Request, stage: str = ""):
     leads = db.list_leads()
     if stage in db.STAGES:
         leads = [l for l in leads if l.get("stage") == stage]
+    for l in leads:
+        l["payout"] = db.payout_estimate(l)
+        dt = db.DEAL_TYPES.get(l.get("motivation") or "standard", db.DEAL_TYPES["standard"])
+        l["deal_label"] = dt["label"]
     return templates.TemplateResponse(request, "leads.html", ctx(request, leads=leads, active_stage=stage))
 
 
@@ -89,10 +94,13 @@ def lead_detail(request: Request, lead_id: int):
     lead = db.get_lead(lead_id)
     if not lead:
         return HTMLResponse("Lead not found", status_code=404)
+    dt = db.DEAL_TYPES.get(lead.get("motivation") or "standard", db.DEAL_TYPES["standard"])
     return templates.TemplateResponse(request, "lead_detail.html", ctx(
         request, lead=lead,
         scripts=call_scripts.scripts_for_stage(lead.get("stage", "new")),
         contract_templates=contracts.TEMPLATES,
+        deal_type=dt,
+        payout=db.payout_estimate(lead),
     ))
 
 

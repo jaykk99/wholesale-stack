@@ -27,8 +27,12 @@
   <label>Tags
     <input name="tags" placeholder="motivated, vacant">
   </label>
-  <label>Why are they selling?
-    <input name="motivation" placeholder="Motivation">
+  <label>Deal type
+    <select name="motivation">
+      {% for key, dt in deal_types.items() %}
+      <option value="{{ key }}">{{ dt.label }} - {{ dt.desc }}</option>
+      {% endfor %}
+    </select>
   </label>
   <button class="btn big primary" type="submit">Save lead</button>
 </form>

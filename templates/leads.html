@@ -15,6 +15,7 @@
     <span class="stagepill st-{{ l.stage }}">{{ stage_labels.get(l.stage, l.stage) }}</span>
   </div>
   <div class="meta">{{ l.city }}{% if l.asking_price %} &middot; ${{ "%.0f"|format(l.asking_price) }}{% endif %} &middot; {{ l.source }}</div>
+  <div class="meta"><span class="stagepill">{{ l.deal_label }}</span>{% if l.payout.ready and l.payout.spread > 0 %} &middot; <strong style="color:green">${{ "{:,}".format(l.payout.spread) }} spread</strong>{% endif %}</div>
   {% if l.owners %}
     {% for o in l.owners %}
     <div class="contactline">

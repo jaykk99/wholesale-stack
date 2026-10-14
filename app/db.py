@@ -29,6 +29,60 @@ T_CONTRACTS = _P + "contracts"
 
 SQLITE_PATH = os.environ.get("SQLITE_PATH", os.path.join(os.path.dirname(__file__), "..", "wholesale.db"))
 
+# Deal types: each maps to playbook guidance, scripts, and contracts.
+DEAL_TYPES = {
+    "probate": {
+        "label": "Probate / Inherited",
+        "desc": "Owner passed away. Heirs want to sell fast.",
+        "script": "cold_call",
+        "contract": "purchase_agreement",
+        "playbook": "/playbook#probate",
+    },
+    "pre_foreclosure": {
+        "label": "Pre-Foreclosure",
+        "desc": "Owner can't keep up with payments.",
+        "script": "cold_call",
+        "contract": "purchase_agreement",
+        "playbook": "/playbook#pre-foreclosure",
+    },
+    "absentee": {
+        "label": "Absentee Owner",
+        "desc": "Owner doesn't live there. Often neglected.",
+        "script": "cold_call",
+        "contract": "assignment",
+        "playbook": "/playbook",
+    },
+    "tired_landlord": {
+        "label": "Tired Landlord",
+        "desc": "Landlord done dealing with tenants.",
+        "script": "follow_up",
+        "contract": "assignment",
+        "playbook": "/playbook",
+    },
+    "standard": {
+        "label": "Standard",
+        "desc": "Regular motivated seller.",
+        "script": "cold_call",
+        "contract": "purchase_agreement",
+        "playbook": "/playbook",
+    },
+}
+
+
+def payout_estimate(lead: dict) -> dict:
+    """Wholesaling payout math: MAO = (ARV x 0.70) - repairs. Spread = MAO - asking."""
+    try:
+        arv = float(lead.get("arv_estimate") or 0)
+        asking = float(lead.get("asking_price") or 0)
+        repairs = float(lead.get("repair_estimate") or 0)
+    except (TypeError, ValueError):
+        return {"mao": 0, "spread": 0, "ready": False}
+    if not arv:
+        return {"mao": 0, "spread": 0, "ready": False}
+    mao = arv * 0.70 - repairs
+    spread = (mao - asking) if asking else 0
+    return {"mao": round(mao), "spread": round(spread), "ready": True}
+
 STAGES = ["new", "contacted", "appointment", "offer", "negotiation", "closed_won", "closed_lost"]
 STAGE_LABELS = {
     "new": "New Lead",

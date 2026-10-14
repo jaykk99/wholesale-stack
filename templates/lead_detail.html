@@ -27,8 +27,14 @@
     {% if lead.offer_amount %}<div class="numtile"><div class="k">Offer</div><div class="v">${{ "%.0f"|format(lead.offer_amount) }}</div></div>{% endif %}
     {% if lead.arv_estimate %}<div class="numtile"><div class="k">ARV</div><div class="v">${{ "%.0f"|format(lead.arv_estimate) }}</div></div>{% endif %}
     {% if lead.repair_estimate %}<div class="numtile"><div class="k">Repairs</div><div class="v">${{ "%.0f"|format(lead.repair_estimate) }}</div></div>{% endif %}
+    {% if payout.ready and payout.spread > 0 %}<div class="numtile"><div class="k">Your Spread</div><div class="v" style="color:green">${{ "{:,}".format(payout.spread) }}</div></div>{% endif %}
   </div>
-  {% if lead.motivation %}<p style="margin-bottom:0"><strong>Motivation:</strong> {{ lead.motivation }}</p>{% endif %}
+  <p style="margin-bottom:.4rem"><strong>Deal type:</strong> {{ deal_type.label }}</p>
+  <p class="muted" style="margin-top:0">
+    <a href="{{ deal_type.playbook }}">How-to guide</a> &middot;
+    <a href="/scripts">What to say</a> &middot;
+    <a href="#contracts">Which contract</a>
+  </p>
   {% if lead.tags %}<p class="tags" style="margin-bottom:0">{{ lead.tags }}</p>{% endif %}
   {% if lead.source_url %}<p style="margin-bottom:0"><a href="{{ lead.source_url }}" target="_blank" rel="noopener">View original listing</a></p>{% endif %}
 </div>
