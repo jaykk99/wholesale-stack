@@ -14,6 +14,13 @@ from app.main import app as fastapi_app
 async def app(scope, receive, send):
     if scope["type"] == "http":
         path = scope.get("path", "")
+        # DEBUG: prove this wrapper runs
+        if path == "/__debug_path":
+            body = f"wrapper-alive path={path} qs={scope.get('query_string', b'').decode()}".encode()
+            await send({"type": "http.response.start", "status": 200,
+                        "headers": [(b"content-type", b"text/plain")]})
+            await send({"type": "http.response.body", "body": body})
+            return
         qs = parse_qs(scope.get("query_string", b"").decode())
         orig = (qs.get("__path") or [None])[0]
         if orig:
