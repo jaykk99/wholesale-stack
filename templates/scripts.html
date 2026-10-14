@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Call Scripts</h1>
+<p class="muted">Read these word-for-word on calls. The right script also shows on each lead page for its stage.</p>
+{% for sc in scripts %}
+<details class="card script">
+  <summary><strong>{{ sc.title }}</strong><br><span class="muted">{{ sc.goal }} &middot; Stages: {{ sc.stages|join(", ") }}</span></summary>
+  <pre class="scriptbody">{{ sc.body }}</pre>
+</details>
+{% endfor %}
+{% endblock %}

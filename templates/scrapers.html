@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Scrapers</h1>
+<p class="muted">Polite scrapers only: robots.txt respected, rate-limited, no logins. New leads land in the pipeline as "New Lead".</p>
+{% for s in scrapers %}
+<div class="card">
+  <strong>{{ s.name }}</strong>
+  {% if s.note %}<div class="muted">{{ s.note }}</div>{% endif %}
+  <form method="post" action="/scrapers/{{ s.name }}/run" style="margin-top:.5rem">
+    <button class="btn" type="submit">Run now</button>
+  </form>
+</div>
+{% endfor %}
+{% endblock %}

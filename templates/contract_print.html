@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ tmpl.title }} - {{ lead.address }}</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+@media print {
+  .noprint, .topbar, .foot { display: none !important; }
+  body { font-size: 12pt; }
+}
+.contract { max-width: 700px; margin: 0 auto; line-height: 1.6; }
+.contract h2 { text-align: center; }
+.siggrid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 3rem; }
+.sigline { border-top: 1px solid #000; padding-top: .25rem; color: #555; }
+</style>
+</head>
+<body>
+<header class="topbar noprint">
+  <a href="/leads/{{ lead.id }}" class="brand">&larr; Back to lead</a>
+</header>
+<main class="wrap">
+<div class="noprint">
+  <button class="btn big primary" onclick="window.print()">Print / Save PDF</button>
+  <p class="muted">Saved to this lead's record. Templates are not legal advice - have a local lawyer review before use.</p>
+</div>
+<div class="contract">{{ contract_html|safe }}</div>
+</main>
+</body>
+</html>

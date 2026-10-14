@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ tmpl.title }}</h1>
+<p class="muted">{{ tmpl.description }}</p>
+<p class="muted">For: <strong>{{ lead.address }}</strong>. Fields are pre-filled from the deal where possible. Review everything before printing - these are templates, not legal advice.</p>
+<form method="post" action="/leads/{{ lead.id }}/contracts/{{ tmpl.id }}" class="form">
+{% for f in tmpl.fields %}
+  <label>{{ f.label }} <input name="{{ f.name }}" value="{{ values.get(f.name, '') }}"></label>
+{% endfor %}
+  <button class="btn big primary" type="submit">Generate printable contract</button>
+</form>
+{% endblock %}

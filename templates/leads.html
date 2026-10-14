@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Leads{% if active_stage %} &middot; {{ stage_labels[active_stage] }}{% endif %}</h1>
+<p><a class="btn" href="/leads/new">+ Add lead</a> <a class="btn ghost" href="/leads">All</a></p>
+{% for l in leads %}
+<div class="card leadrow">
+  <a class="addr" href="/leads/{{ l.id }}">{{ l.address }}</a>
+  <div class="meta">{{ l.city }} &middot; {{ stage_labels.get(l.stage, l.stage) }} &middot; {{ l.source }}
+  {% if l.asking_price %}&middot; ${{ "%.0f"|format(l.asking_price) }}{% endif %}</div>
+  {% if l.owners %}
+    {% for o in l.owners %}
+    <div class="contactline">
+      <strong>{{ o.name or "Unknown" }}</strong>
+      {% if o.phone %} &middot; <a class="tel" href="tel:{{ o.phone|replace(' ', '')|replace('-', '')|replace('(', '')|replace(')', '') }}">&#9742; {{ o.phone }}</a>{% endif %}
+    </div>
+    {% endfor %}
+  {% endif %}
+  {% if l.tags %}<div class="tags">{{ l.tags }}</div>{% endif %}
+</div>
+{% else %}
+<p class="muted">No leads here yet.</p>
+{% endfor %}
+{% endblock %}

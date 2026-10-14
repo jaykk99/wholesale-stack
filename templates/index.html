@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Pipeline</h1>
+<div class="stagegrid">
+{% for s in stages %}
+  <a class="stagecard" href="/leads?stage={{ s }}">
+    <span class="count">{{ counts.get(s, 0) }}</span>
+    <span class="slabel">{{ stage_labels[s] }}</span>
+  </a>
+{% endfor %}
+</div>
+<p><a class="btn big" href="/leads/new">+ Add lead</a></p>
+<h2>Latest leads</h2>
+{% for l in leads[:10] %}
+<div class="card">
+  <a class="addr" href="/leads/{{ l.id }}">{{ l.address }}</a>
+  <div class="meta">{{ stage_labels.get(l.stage, l.stage) }} &middot; {{ l.source }}</div>
+</div>
+{% else %}
+<p class="muted">No leads yet. Add one or run a scraper.</p>
+{% endfor %}
+{% endblock %}
