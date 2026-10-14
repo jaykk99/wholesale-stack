@@ -37,7 +37,7 @@ def exit_strategies(lead: dict) -> list[dict]:
     spread = mao - buy if asking else 0
     strategies = []
 
-    # 1. Wholesale assignment
+    # 1. Wholesale assignment - no money needed, fastest
     strategies.append({
         "id": "assignment",
         "title": "Wholesale Assignment",
@@ -52,9 +52,35 @@ def exit_strategies(lead: dict) -> list[dict]:
         "cons": ["Need a buyer lined up", "Smaller profit than flipping", "Seller sees your fee on the closing statement"],
         "contract_id": "assignment",
         "ready": asking > 0 and spread > 0,
+        "no_money": True,
+        "speed": "7-21 days",
+        "speed_days": 14,
     })
 
-    # 2. Double close
+    # 2. Novation - no money needed
+    list_nov = arv * 0.95
+    nov_costs = 2000
+    profit_nov = list_nov - buy - nov_costs
+    strategies.append({
+        "id": "novation",
+        "title": "Novation",
+        "how": "The seller signs an agreement letting you market their house and find the buyer. You list it, bring the buyer, and keep everything above the agreed price. Cleaner than assignment because you control the sale.",
+        "math": [
+            ("Agreed price with seller", _money(buy)),
+            ("You list and sell for", _money(list_nov)),
+            ("Marketing + closing", _money(nov_costs)),
+            ("Your profit", _money(profit_nov)),
+        ],
+        "pros": ["No money needed", "Bigger fees than assignment", "No buyer list needed upfront", "Seller is cooperative by design"],
+        "cons": ["Takes longer than assignment", "You pay for marketing", "Needs MLS access or an agent partner"],
+        "contract_id": "memorandum_of_agreement",
+        "ready": asking > 0 and profit_nov > 0,
+        "no_money": True,
+        "speed": "30-60 days",
+        "speed_days": 45,
+    })
+
+    # 3. Double close
     sell_dc = arv * 0.95
     close_buy = buy * 0.02
     close_sell = sell_dc * 0.02
@@ -73,32 +99,65 @@ def exit_strategies(lead: dict) -> list[dict]:
         "cons": ["Two sets of closing costs", "Need short term funding for the first close", "Tight timing between closings"],
         "contract_id": "purchase_agreement",
         "ready": asking > 0 and profit_dc > 0,
+        "no_money": False,
+        "speed": "14-30 days",
+        "speed_days": 21,
     })
 
-    # 3. Fix and flip
-    sell_flip = arv
-    purchase_close = buy * 0.02
-    holding = buy * 0.006 * 6  # 6 months carry
-    selling_cost = sell_flip * 0.06  # realtor + closing
-    profit_flip = sell_flip - buy - repairs - purchase_close - holding - selling_cost
+    # 4. Lease option - little money down
+    opt_fee = arv * 0.04
+    mkt_rent = arv * 0.008
+    lease_to_seller = mkt_rent
+    rent_from_tenant = mkt_rent * 1.10
+    mo_spread = rent_from_tenant - lease_to_seller
+    backend = arv - buy
+    total_lo = opt_fee + mo_spread * 12 + backend
     strategies.append({
-        "id": "fix_flip",
-        "title": "Fix and Flip",
-        "how": "Buy it, renovate it, sell it at full retail price. This is the biggest profit of any strategy, but you need renovation money and it takes months.",
+        "id": "lease_option",
+        "title": "Lease Option",
+        "how": "You lease the house from the seller with the right to buy it later, then lease it to a tenant buyer at a higher rent with the right to buy from you. You profit three ways: an upfront option fee, a monthly rent spread, and the backend price difference.",
+        "math": [
+            ("Option fee upfront", _money(opt_fee)),
+            ("Monthly rent spread", _money(mo_spread)),
+            ("Backend profit at sale", _money(backend)),
+            ("Total profit (1 yr)", _money(total_lo)),
+        ],
+        "pros": ["Three profit streams", "Little money down", "Tenant buyer handles maintenance"],
+        "cons": ["Complex paperwork", "Two deals to manage", "Tenant buyer may not close"],
+        "contract_id": "option_agreement",
+        "ready": asking > 0 and backend > 0,
+        "no_money": False,
+        "speed": "14-30 days",
+        "speed_days": 21,
+    })
+
+    # 5. Wholetail
+    cleanup = 3000
+    list_wt = arv * 0.95
+    realtor = list_wt * 0.05
+    close_wt = list_wt * 0.02
+    profit_wt = list_wt - buy - cleanup - realtor - close_wt
+    strategies.append({
+        "id": "wholetail",
+        "title": "Wholetail",
+        "how": "Buy it, do a light cleanup (paint, trash out, landscaping), then list it on the MLS like a normal sale. Faster than a full flip and bigger profit than wholesaling.",
         "math": [
             ("Buy", _money(buy)),
-            ("Renovation", _money(repairs)),
-            ("Sell at ARV", _money(sell_flip)),
-            ("Closing + holding + realtor", _money(purchase_close + holding + selling_cost)),
-            ("Your profit", _money(profit_flip)),
+            ("Light cleanup", _money(cleanup)),
+            ("List on MLS for", _money(list_wt)),
+            ("Realtor + closing", _money(realtor + close_wt)),
+            ("Your profit", _money(profit_wt)),
         ],
-        "pros": ["Highest profit", "You control the whole deal", "Builds a track record with lenders"],
-        "cons": ["Needs capital for buy + reno", "Renovation surprises happen", "Takes 3 to 6 months"],
+        "pros": ["Bigger than wholesale profit", "Fast, no big reno", "Retail buyers pay more"],
+        "cons": ["Need a listing agent", "Market can shift while listed", "Carrying costs if it sits"],
         "contract_id": "purchase_agreement",
-        "ready": asking > 0 and profit_flip > 0,
+        "ready": asking > 0 and profit_wt > 0,
+        "no_money": False,
+        "speed": "30-90 days",
+        "speed_days": 60,
     })
 
-    # 4. Buy and hold
+    # 6. Buy and hold
     down = buy * 0.20
     loan = buy * 0.80
     pi = _pmt(loan, 0.07, 30)
@@ -123,9 +182,12 @@ def exit_strategies(lead: dict) -> list[dict]:
         "cons": ["Landlord work or property manager cost", "Money tied up for years", "Vacancy and repair risk"],
         "contract_id": "purchase_agreement",
         "ready": asking > 0 and cashflow > 0,
+        "no_money": False,
+        "speed": "30-45 days",
+        "speed_days": 37,
     })
 
-    # 5. Seller financing
+    # 7. Seller financing
     sell_sf = arv
     down_sf = sell_sf * 0.10
     bal = sell_sf - down_sf
@@ -147,73 +209,37 @@ def exit_strategies(lead: dict) -> list[dict]:
         "cons": ["Buyer might default", "Money comes in slowly", "Need a proper promissory note and mortgage"],
         "contract_id": "purchase_agreement",
         "ready": asking > 0,
+        "no_money": False,
+        "speed": "30-60 days",
+        "speed_days": 45,
     })
 
-    # 6. Lease option
-    opt_fee = arv * 0.04
-    mkt_rent = arv * 0.008
-    lease_to_seller = mkt_rent
-    rent_from_tenant = mkt_rent * 1.10
-    mo_spread = rent_from_tenant - lease_to_seller
-    backend = arv - buy
-    total_lo = opt_fee + mo_spread * 12 + backend
+    # 8. Fix and flip
+    sell_flip = arv
+    purchase_close = buy * 0.02
+    holding = buy * 0.006 * 6  # 6 months carry
+    selling_cost = sell_flip * 0.06  # realtor + closing
+    profit_flip = sell_flip - buy - repairs - purchase_close - holding - selling_cost
     strategies.append({
-        "id": "lease_option",
-        "title": "Lease Option",
-        "how": "You lease the house from the seller with the right to buy it later, then lease it to a tenant buyer at a higher rent with the right to buy from you. You profit three ways: an upfront option fee, a monthly rent spread, and the backend price difference.",
-        "math": [
-            ("Option fee upfront", _money(opt_fee)),
-            ("Monthly rent spread", _money(mo_spread)),
-            ("Backend profit at sale", _money(backend)),
-            ("Total profit (1 yr)", _money(total_lo)),
-        ],
-        "pros": ["Three profit streams", "Little money down", "Tenant buyer handles maintenance"],
-        "cons": ["Complex paperwork", "Two deals to manage", "Tenant buyer may not close"],
-        "contract_id": "option_agreement",
-        "ready": asking > 0 and backend > 0,
-    })
-
-    # 7. Novation
-    list_nov = arv * 0.95
-    nov_costs = 2000
-    profit_nov = list_nov - buy - nov_costs
-    strategies.append({
-        "id": "novation",
-        "title": "Novation",
-        "how": "The seller signs an agreement letting you market their house and find the buyer. You list it, bring the buyer, and keep everything above the agreed price. Cleaner than assignment because you control the sale.",
-        "math": [
-            ("Agreed price with seller", _money(buy)),
-            ("You list and sell for", _money(list_nov)),
-            ("Marketing + closing", _money(nov_costs)),
-            ("Your profit", _money(profit_nov)),
-        ],
-        "pros": ["Bigger fees than assignment", "No buyer list needed upfront", "Seller is cooperative by design"],
-        "cons": ["Takes longer than assignment", "You pay for marketing", "Needs MLS access or an agent partner"],
-        "contract_id": "memorandum_of_agreement",
-        "ready": asking > 0 and profit_nov > 0,
-    })
-
-    # 8. Wholetail
-    cleanup = 3000
-    list_wt = arv * 0.95
-    realtor = list_wt * 0.05
-    close_wt = list_wt * 0.02
-    profit_wt = list_wt - buy - cleanup - realtor - close_wt
-    strategies.append({
-        "id": "wholetail",
-        "title": "Wholetail",
-        "how": "Buy it, do a light cleanup (paint, trash out, landscaping), then list it on the MLS like a normal sale. Faster than a full flip and bigger profit than wholesaling.",
+        "id": "fix_flip",
+        "title": "Fix and Flip",
+        "how": "Buy it, renovate it, sell it at full retail price. This is the biggest profit of any strategy, but you need renovation money and it takes months.",
         "math": [
             ("Buy", _money(buy)),
-            ("Light cleanup", _money(cleanup)),
-            ("List on MLS for", _money(list_wt)),
-            ("Realtor + closing", _money(realtor + close_wt)),
-            ("Your profit", _money(profit_wt)),
+            ("Renovation", _money(repairs)),
+            ("Sell at ARV", _money(sell_flip)),
+            ("Closing + holding + realtor", _money(purchase_close + holding + selling_cost)),
+            ("Your profit", _money(profit_flip)),
         ],
-        "pros": ["Bigger than wholesale profit", "Fast, no big reno", "Retail buyers pay more"],
-        "cons": ["Need a listing agent", "Market can shift while listed", "Carrying costs if it sits"],
+        "pros": ["Highest profit", "You control the whole deal", "Builds a track record with lenders"],
+        "cons": ["Needs capital for buy + reno", "Renovation surprises happen", "Takes 3 to 6 months"],
         "contract_id": "purchase_agreement",
-        "ready": asking > 0 and profit_wt > 0,
+        "ready": asking > 0 and profit_flip > 0,
+        "no_money": False,
+        "speed": "3-6 months",
+        "speed_days": 135,
     })
 
+    # Sort: no-money strategies first (by speed), then the rest (by speed)
+    strategies.sort(key=lambda s: (0 if s["no_money"] else 1, s["speed_days"]))
     return strategies

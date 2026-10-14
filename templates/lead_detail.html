@@ -4,6 +4,16 @@
 <h1>{{ lead.address }}</h1>
 <div class="meta" style="margin:-.6rem 0 1rem">{{ lead.city }} {{ lead.postal }} &middot; Source: {{ lead.source }}</div>
 
+{% for o in lead.owners %}
+{% if o.phone %}
+{% set tel = (o.phone or '')|replace(' ', '')|replace('-', '')|replace('(', '')|replace(')', '') %}
+<a href="tel:{{ tel }}" class="bigcall">
+  <span class="bigcall-label">&#9742; Call {{ o.name or "Seller" }}</span>
+  <span class="bigcall-num">{{ o.phone }}</span>
+</a>
+{% endif %}
+{% endfor %}
+
 <div class="contactcard">
   {% for o in lead.owners %}
   <div class="cname">{{ o.name or "Unknown contact" }}</div>
@@ -58,12 +68,12 @@
       <div class="small" style="color:green;margin-top:.25rem">&#10003; Contacted ({{ contacted[0].channel }})</div>
       {% endif %}
     </div>
-    <div style="flex-shrink:0;text-align:right">
+    <div style="flex-shrink:0;text-align:right;min-width:180px">
       {% set tel = (b.phone or '')|replace(' ', '')|replace('-', '')|replace('(', '')|replace(')', '') %}
       {% if b.phone %}
-      <div class="callrow" style="margin-bottom:.4rem">
-        <a class="btn call" href="tel:{{ tel }}">&#9742; Call</a>
-        <a class="btn text" href="sms:{{ tel }}">&#9993; Text</a>
+      <div class="buyercall">
+        <a class="btn call" href="tel:{{ tel }}">&#9742;<br>{{ b.phone }}</a>
+        <a class="btn text" href="sms:{{ tel }}">&#9993;<br>Text</a>
       </div>
       {% endif %}
       {% if b.email %}<div><a class="btn" href="mailto:{{ b.email }}?subject=Deal: {{ lead.address }}">&#9993; Email</a></div>{% endif %}
@@ -82,10 +92,15 @@
 {% endif %}
 
 <h2>Sell: exit strategies</h2>
-<p class="muted">Every way to make money on this house, with the math for this deal.</p>
+<p class="muted">Every way to make money on this house, with the math for this deal. No-money strategies first.</p>
+<div class="filter-row">
+  <input type="checkbox" id="nomoney-only" onchange="filterExits()">
+  <label for="nomoney-only">Show only no-money strategies</label>
+</div>
+<div id="exits-list">
 {% for e in exits %}
-<details class="card" {% if loop.first and e.ready %}open{% endif %}>
-  <summary><strong>{{ e.title }}</strong>
+<details class="card exit-strategy" data-no-money="{{ '1' if e.no_money else '0' }}" {% if loop.first and e.ready %}open{% endif %}>
+  <summary><strong>{{ e.title }}</strong>{% if e.no_money %}<span class="nomoney-badge">No Money Needed</span>{% endif %}<span class="speed-pill">{{ e.speed }}</span>
     {% set profit_row = e.math[-1] %}
     <br><span class="muted">Profit: {{ profit_row[1] }}</span>
     {% if not e.ready %}<span class="muted"> &middot; needs numbers</span>{% endif %}
@@ -103,6 +118,15 @@
 {% else %}
 <p class="muted">Add an ARV estimate to see exit strategy math.</p>
 {% endfor %}
+</div>
+<script>
+function filterExits() {
+  var only = document.getElementById('nomoney-only').checked;
+  document.querySelectorAll('.exit-strategy').forEach(function(el) {
+    el.style.display = (only && el.dataset.noMoney !== '1') ? 'none' : '';
+  });
+}
+</script>
 
 <h2>Stage: {{ stage_labels.get(lead.stage, lead.stage) }}</h2>
 <form method="post" action="/leads/{{ lead.id }}/stage">
