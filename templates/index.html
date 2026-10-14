@@ -1,22 +1,26 @@
 {% extends "base.html" %}
+{% block title %}Pipeline - Wholesale Deals{% endblock %}
 {% block content %}
 <h1>Pipeline</h1>
 <div class="stagegrid">
 {% for s in stages %}
-  <a class="stagecard" href="/leads?stage={{ s }}">
+  <a class="stagecard st-{{ s }}" href="/leads?stage={{ s }}">
     <span class="count">{{ counts.get(s, 0) }}</span>
     <span class="slabel">{{ stage_labels[s] }}</span>
   </a>
 {% endfor %}
 </div>
-<p><a class="btn big" href="/leads/new">+ Add lead</a></p>
+<a class="btn big primary" href="/leads/new">+ Add lead</a>
 <h2>Latest leads</h2>
 {% for l in leads[:10] %}
-<div class="card">
-  <a class="addr" href="/leads/{{ l.id }}">{{ l.address }}</a>
-  <div class="meta">{{ stage_labels.get(l.stage, l.stage) }} &middot; {{ l.source }}</div>
-</div>
+<a class="card leadrow" href="/leads/{{ l.id }}">
+  <div class="top">
+    <span class="addr">{{ l.address }}</span>
+    <span class="stagepill st-{{ l.stage }}">{{ stage_labels.get(l.stage, l.stage) }}</span>
+  </div>
+  <div class="meta">{{ l.city }} &middot; {{ l.source }}{% if l.asking_price %} &middot; ${{ "%.0f"|format(l.asking_price) }}{% endif %}</div>
+</a>
 {% else %}
-<p class="muted">No leads yet. Add one or run a scraper.</p>
+<div class="card"><p class="muted">No leads yet. Tap + to add one, or run a scraper under Tools.</p></div>
 {% endfor %}
 {% endblock %}

@@ -1,16 +1,35 @@
 {% extends "base.html" %}
+{% block title %}Add lead - Wholesale Deals{% endblock %}
 {% block content %}
 <h1>Add lead</h1>
-<form method="post" action="/leads/new" class="form">
-  <label>Property address <input name="address" required placeholder="123 Main St"></label>
-  <label>City <input name="city" value="Winnipeg"></label>
-  <label>Postal <input name="postal"></label>
-  <label>Contact name <input name="owner_name" placeholder="Seller name"></label>
-  <label>Contact phone <input name="owner_phone" type="tel" placeholder="204-555-0100"></label>
-  <label>Contact email <input name="owner_email" type="email"></label>
-  <label>Asking price <input name="asking_price" type="number" min="0"></label>
-  <label>Tags <input name="tags" placeholder="motivated, vacant"></label>
-  <label>Motivation <input name="motivation" placeholder="Why selling?"></label>
+<form method="post" action="/leads/new" class="form card">
+  <label>Property address
+    <input name="address" required placeholder="123 Main St" autocomplete="street-address">
+  </label>
+  <label>City
+    <input name="city" value="Winnipeg" autocomplete="address-level2">
+  </label>
+  <label>Postal code
+    <input name="postal" autocomplete="postal-code">
+  </label>
+  <label>Seller name
+    <input name="owner_name" placeholder="Seller name" autocomplete="name">
+  </label>
+  <label>Seller phone
+    <input name="owner_phone" type="tel" placeholder="204-555-0100" autocomplete="tel">
+  </label>
+  <label>Seller email
+    <input name="owner_email" type="email" placeholder="seller@example.com" autocomplete="email">
+  </label>
+  <label>Asking price
+    <input name="asking_price" type="number" min="0" inputmode="numeric" placeholder="250000">
+  </label>
+  <label>Tags
+    <input name="tags" placeholder="motivated, vacant">
+  </label>
+  <label>Why are they selling?
+    <input name="motivation" placeholder="Motivation">
+  </label>
   <button class="btn big primary" type="submit">Save lead</button>
 </form>
 {% endblock %}

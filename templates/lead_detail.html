@@ -1,45 +1,52 @@
 {% extends "base.html" %}
+{% block title %}{{ lead.address }} - Wholesale Deals{% endblock %}
 {% block content %}
 <h1>{{ lead.address }}</h1>
+<div class="meta" style="margin:-.6rem 0 1rem">{{ lead.city }} {{ lead.postal }} &middot; Source: {{ lead.source }}</div>
+
 <div class="contactcard">
   {% for o in lead.owners %}
-  <div class="contactbig">
-    <div class="cname">{{ o.name or "Unknown contact" }}</div>
-    {% if o.phone %}
-    <a class="btn big callbtn" href="tel:{{ o.phone|replace(' ', '')|replace('-', '')|replace('(', '')|replace(')', '') }}">&#9742; Call {{ o.phone }}</a>
-    {% else %}<div class="muted">No phone on file</div>{% endif %}
-    {% if o.email %}<div class="muted">{{ o.email }}</div>{% endif %}
+  <div class="cname">{{ o.name or "Unknown contact" }}</div>
+  {% if o.phone %}<div class="cphone">{{ o.phone }}</div>{% endif %}
+  {% set tel = (o.phone or '')|replace(' ', '')|replace('-', '')|replace('(', '')|replace(')', '') %}
+  {% if o.phone %}
+  <div class="callrow">
+    <a class="btn call" href="tel:{{ tel }}">&#9742; Call</a>
+    <a class="btn text" href="sms:{{ tel }}">&#9993; Text</a>
   </div>
+  {% else %}<div class="muted">No phone on file</div>{% endif %}
+  {% if o.email %}<div class="muted" style="margin-top:.5rem">{{ o.email }}</div>{% endif %}
   {% else %}
   <div class="muted">No contact on file yet.</div>
   {% endfor %}
 </div>
 
 <div class="card">
-  <div class="meta">{{ lead.city }} {{ lead.postal }} &middot; Source: {{ lead.source }}</div>
-  {% if lead.source_url %}<div><a href="{{ lead.source_url }}" target="_blank" rel="noopener">View original listing</a></div>{% endif %}
-  <div class="nums">
-    {% if lead.asking_price %}<span>Asking <strong>${{ "%.0f"|format(lead.asking_price) }}</strong></span>{% endif %}
-    {% if lead.offer_amount %}<span>Offer <strong>${{ "%.0f"|format(lead.offer_amount) }}</strong></span>{% endif %}
-    {% if lead.arv_estimate %}<span>ARV <strong>${{ "%.0f"|format(lead.arv_estimate) }}</strong></span>{% endif %}
-    {% if lead.repair_estimate %}<span>Repairs <strong>${{ "%.0f"|format(lead.repair_estimate) }}</strong></span>{% endif %}
+  <div class="numgrid">
+    {% if lead.asking_price %}<div class="numtile"><div class="k">Asking</div><div class="v">${{ "%.0f"|format(lead.asking_price) }}</div></div>{% endif %}
+    {% if lead.offer_amount %}<div class="numtile"><div class="k">Offer</div><div class="v">${{ "%.0f"|format(lead.offer_amount) }}</div></div>{% endif %}
+    {% if lead.arv_estimate %}<div class="numtile"><div class="k">ARV</div><div class="v">${{ "%.0f"|format(lead.arv_estimate) }}</div></div>{% endif %}
+    {% if lead.repair_estimate %}<div class="numtile"><div class="k">Repairs</div><div class="v">${{ "%.0f"|format(lead.repair_estimate) }}</div></div>{% endif %}
   </div>
-  {% if lead.motivation %}<p><strong>Motivation:</strong> {{ lead.motivation }}</p>{% endif %}
-  {% if lead.tags %}<p class="tags">{{ lead.tags }}</p>{% endif %}
+  {% if lead.motivation %}<p style="margin-bottom:0"><strong>Motivation:</strong> {{ lead.motivation }}</p>{% endif %}
+  {% if lead.tags %}<p class="tags" style="margin-bottom:0">{{ lead.tags }}</p>{% endif %}
+  {% if lead.source_url %}<p style="margin-bottom:0"><a href="{{ lead.source_url }}" target="_blank" rel="noopener">View original listing</a></p>{% endif %}
 </div>
 
-<h2>Pipeline stage: {{ stage_labels.get(lead.stage, lead.stage) }}</h2>
-<form method="post" action="/leads/{{ lead.id }}/stage" class="stagebtns">
-{% for s in stages %}
-  <button class="btn{% if s == lead.stage %} primary{% else %} ghost{% endif %}" name="to_stage" value="{{ s }}">{{ stage_labels[s] }}</button>
-{% endfor %}
+<h2>Stage: {{ stage_labels.get(lead.stage, lead.stage) }}</h2>
+<form method="post" action="/leads/{{ lead.id }}/stage">
+  <div class="stepper">
+  {% for s in stages %}
+    <button class="btn{% if s == lead.stage %} primary{% elif stages.index(s) < stages.index(lead.stage) %} done{% else %} ghost{% endif %}" name="to_stage" value="{{ s }}">{{ stage_labels[s] }}</button>
+  {% endfor %}
+  </div>
 </form>
 
-<h2>Script for this stage</h2>
+<h2>What to say</h2>
 {% for sc in scripts %}
 <details class="card script" {% if loop.first %}open{% endif %}>
-  <summary><strong>{{ sc.title }}</strong> <span class="muted">- {{ sc.goal }}</span></summary>
-  <pre class="scriptbody">{{ sc.body }}</pre>
+  <summary><strong>{{ sc.title }}</strong><br><span class="muted">{{ sc.goal }}</span></summary>
+  <div class="scriptbody">{{ sc.body }}</div>
 </details>
 {% else %}
 <p class="muted">No script mapped to this stage.</p>
@@ -47,29 +54,33 @@
 <p><a href="/scripts">Full script library</a></p>
 
 <h2>Contracts</h2>
-<p>
+<div class="card">
 {% for t in contract_templates %}
   <a class="btn" href="/leads/{{ lead.id }}/contracts/{{ t.id }}">{{ t.title }}</a>
 {% endfor %}
-</p>
 {% if lead.contracts %}
-<ul>
+<ul class="clist">
 {% for c in lead.contracts %}
-  <li>{{ c.template_id }} &middot; {{ c.created_at|int }}</li>
+  <li><strong>{{ c.template_id }}</strong> <span class="muted">&middot; saved</span></li>
 {% endfor %}
 </ul>
 {% endif %}
+</div>
 
 <h2>Log a call</h2>
-<form method="post" action="/leads/{{ lead.id }}/calls" class="form">
+<form method="post" action="/leads/{{ lead.id }}/calls" class="form card">
   <label>Outcome
     <select name="outcome">
-      <option>No answer</option><option>Left voicemail</option><option>Talked - interested</option>
-      <option>Talked - not interested</option><option>Appointment set</option><option>Offer made</option><option>Follow up later</option>
+      <option>No answer</option><option>Left voicemail</option><option>Talked, interested</option>
+      <option>Talked, not interested</option><option>Appointment set</option><option>Offer made</option><option>Follow up later</option>
     </select>
   </label>
-  <label>Minutes <input name="duration_min" type="number" min="0" value="0"></label>
-  <label>Notes <textarea name="notes" rows="2"></textarea></label>
+  <label>Minutes
+    <input name="duration_min" type="number" min="0" value="0" inputmode="numeric">
+  </label>
+  <label>Notes
+    <textarea name="notes" rows="2" placeholder="What did they say?"></textarea>
+  </label>
   <button class="btn big primary" type="submit">Save call</button>
 </form>
 
@@ -79,9 +90,11 @@
 {% else %}<p class="muted">No calls logged yet.</p>{% endfor %}
 
 <h2>Notes</h2>
-<form method="post" action="/leads/{{ lead.id }}/notes" class="form">
-  <textarea name="body" rows="2" required></textarea>
-  <button class="btn" type="submit">Add note</button>
+<form method="post" action="/leads/{{ lead.id }}/notes" class="form card">
+  <label>New note
+    <textarea name="body" rows="2" required placeholder="Write a note"></textarea>
+  </label>
+  <button class="btn primary" type="submit">Add note</button>
 </form>
 {% for n in lead.notes %}
 <div class="card">{{ n.body }}</div>

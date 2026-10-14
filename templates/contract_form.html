@@ -1,9 +1,13 @@
 {% extends "base.html" %}
+{% block title %}{{ tmpl.title }} - Wholesale Deals{% endblock %}
 {% block content %}
 <h1>{{ tmpl.title }}</h1>
 <p class="muted">{{ tmpl.description }}</p>
-<p class="muted">For: <strong>{{ lead.address }}</strong>. Fields are pre-filled from the deal where possible. Review everything before printing - these are templates, not legal advice.</p>
-<form method="post" action="/leads/{{ lead.id }}/contracts/{{ tmpl.id }}" class="form">
+<div class="card">
+  <p style="margin-top:0">For: <strong>{{ lead.address }}</strong></p>
+  <p class="muted">Fields are pre-filled from the deal where possible. Review everything before printing. These are templates, not legal advice.</p>
+</div>
+<form method="post" action="/leads/{{ lead.id }}/contracts/{{ tmpl.id }}" class="form card">
 {% for f in tmpl.fields %}
   <label>{{ f.label }} <input name="{{ f.name }}" value="{{ values.get(f.name, '') }}"></label>
 {% endfor %}

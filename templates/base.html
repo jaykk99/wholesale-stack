@@ -2,22 +2,25 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Wholesale Stack</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% block title %}Wholesale Deals{% endblock %}</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <header class="topbar">
-  <a href="/" class="brand">Wholesale Stack</a>
-  <nav>
-    <a href="/leads">Leads</a>
-    <a href="/scripts">Scripts</a>
-    <a href="/scrapers">Scrapers</a>
-  </nav>
+  <a href="/" class="brand">Wholesale Deals</a>
+  <span class="dbpill">{{ backend }}</span>
 </header>
 <main class="wrap">
 {% block content %}{% endblock %}
 </main>
-<footer class="foot">DB: {{ backend }}</footer>
+<nav class="tabbar" aria-label="Main">
+  <a href="/" class="{% if tab == 'home' %}on{% endif %}"><span class="ico">&#8962;</span>Home</a>
+  <a href="/leads" class="{% if tab == 'leads' %}on{% endif %}"><span class="ico">&#9776;</span>Leads</a>
+  <a href="/leads/new" class="add" aria-label="Add lead"><span class="ico">+</span></a>
+  <a href="/scripts" class="{% if tab == 'scripts' %}on{% endif %}"><span class="ico">&#128172;</span>Scripts</a>
+  <a href="/scrapers" class="{% if tab == 'tools' %}on{% endif %}"><span class="ico">&#9881;</span>Tools</a>
+</nav>
+<footer class="foot">Made for Amanda</footer>
 </body>
 </html>

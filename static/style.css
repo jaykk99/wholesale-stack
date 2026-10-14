@@ -1,37 +1,286 @@
-/* Phone-first CRM styles */
-:root { --bg: #f6f7f9; --card: #fff; --ink: #1a1d21; --muted: #6b7280; --brand: #166534; --brand2: #15803d; }
-* { box-sizing: border-box; }
-body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--ink); font-size: 18px; line-height: 1.45; }
-.topbar { background: var(--brand); color: #fff; padding: .8rem 1rem; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; }
-.topbar a { color: #fff; text-decoration: none; font-weight: 600; }
-.topbar nav a { margin-left: 1rem; font-size: 1rem; }
-.brand { font-size: 1.2rem; }
-.wrap { max-width: 720px; margin: 0 auto; padding: 1rem; }
-.foot { text-align: center; color: var(--muted); font-size: .8rem; padding: 2rem 0; }
-h1 { font-size: 1.6rem; margin: .5rem 0 1rem; }
-h2 { font-size: 1.25rem; margin: 1.5rem 0 .75rem; }
-.card { background: var(--card); border-radius: 12px; padding: 1rem; margin-bottom: .75rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-.addr { font-weight: 700; font-size: 1.1rem; color: var(--brand); text-decoration: none; }
-.meta { color: var(--muted); font-size: .95rem; margin-top: .25rem; }
-.tags { color: var(--brand2); font-size: .9rem; margin-top: .25rem; }
+/* Wholesale Deals - mobile-first CRM for Amanda */
+:root {
+  --bg: #f2f5f3;
+  --card: #ffffff;
+  --ink: #16211b;
+  --muted: #64756a;
+  --brand: #15803d;
+  --brand-dark: #0e5f2c;
+  --brand-soft: #e3f3e9;
+  --line: #e3e9e5;
+  --radius: 16px;
+  --shadow: 0 1px 2px rgba(20, 32, 26, .06), 0 4px 14px rgba(20, 32, 26, .06);
+  --tabbar-h: 68px;
+  --stage-new: #2563eb;
+  --stage-contacted: #b45309;
+  --stage-appointment: #7c3aed;
+  --stage-offer: #c2410c;
+  --stage-negotiation: #be185d;
+  --stage-closed_won: #15803d;
+  --stage-closed_lost: #6b7280;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { font-size: 17px; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.5;
+  padding-bottom: calc(var(--tabbar-h) + 20px);
+}
+
+/* Top bar */
+.topbar {
+  background: var(--brand-dark);
+  color: #fff;
+  padding: .85rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.brand { color: #fff; text-decoration: none; font-weight: 800; font-size: 1.2rem; letter-spacing: .2px; }
+.dbpill {
+  font-size: .72rem;
+  background: rgba(255, 255, 255, .16);
+  padding: .25rem .6rem;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.wrap { max-width: 720px; margin: 0 auto; padding: 1rem 1rem 2rem; }
+.foot { text-align: center; color: var(--muted); font-size: .78rem; padding: 1.5rem 0; }
+
+h1 { font-size: 1.55rem; margin: .4rem 0 1rem; font-weight: 800; letter-spacing: -.01em; }
+h2 { font-size: 1.15rem; margin: 1.6rem 0 .7rem; font-weight: 750; }
 .muted { color: var(--muted); }
-.btn { display: inline-block; background: var(--brand); color: #fff; border: none; border-radius: 10px; padding: .7rem 1.1rem; font-size: 1.05rem; text-decoration: none; cursor: pointer; margin: .25rem .25rem .25rem 0; }
-.btn.primary { background: var(--brand2); }
-.btn.ghost { background: #e5e7eb; color: var(--ink); }
-.btn.big { font-size: 1.2rem; padding: .9rem 1.4rem; }
-.stagegrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .6rem; margin-bottom: 1rem; }
-.stagecard { background: var(--card); border-radius: 12px; padding: .8rem .4rem; text-align: center; text-decoration: none; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-.stagecard .count { display: block; font-size: 1.8rem; font-weight: 800; color: var(--brand); }
-.stagecard .slabel { font-size: .85rem; }
-.stagebtns .btn { font-size: .95rem; padding: .6rem .8rem; }
-.contactcard { background: #ecfdf5; border: 2px solid var(--brand2); border-radius: 12px; padding: 1rem; margin-bottom: 1rem; }
-.cname { font-size: 1.4rem; font-weight: 800; margin-bottom: .5rem; }
-.callbtn { width: 100%; text-align: center; margin-top: .5rem; }
-.contactline { margin-top: .4rem; font-size: 1.05rem; }
-a.tel { color: var(--brand2); font-weight: 700; text-decoration: none; }
-.nums { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: .5rem; }
-.form label { display: block; margin-bottom: .8rem; font-weight: 600; }
-.form input, .form select, .form textarea { display: block; width: 100%; margin-top: .25rem; font-size: 1.1rem; padding: .7rem; border: 1px solid #d1d5db; border-radius: 10px; }
-.scriptbody { white-space: pre-wrap; font-family: inherit; font-size: 1.05rem; background: #f9fafb; padding: .75rem; border-radius: 8px; }
-details.script summary { cursor: pointer; font-size: 1.05rem; }
-.leadrow .addr { display: block; margin-bottom: .15rem; }
+
+/* Cards */
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: .8rem;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--line);
+}
+.addr { font-weight: 750; font-size: 1.08rem; color: var(--brand-dark); text-decoration: none; display: block; }
+.meta { color: var(--muted); font-size: .92rem; margin-top: .3rem; }
+.tags { color: var(--brand); font-size: .88rem; margin-top: .3rem; font-weight: 600; }
+
+/* Buttons - big tap targets */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  background: var(--brand);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  padding: .85rem 1.25rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  min-height: 52px;
+  margin: .25rem .3rem .25rem 0;
+}
+.btn:active { transform: scale(.98); }
+.btn.primary { background: var(--brand-dark); }
+.btn.ghost { background: #e8ede9; color: var(--ink); }
+.btn.big { width: 100%; font-size: 1.2rem; padding: 1rem; min-height: 60px; margin: .5rem 0; }
+.btn.call { background: var(--brand); font-size: 1.25rem; }
+.btn.text { background: #fff; color: var(--brand-dark); border: 2px solid var(--brand); }
+
+/* Pipeline stage cards */
+.stagegrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .7rem; margin-bottom: 1.2rem; }
+.stagecard {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 1rem .6rem;
+  text-align: center;
+  text-decoration: none;
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--line);
+  border-top: 5px solid var(--muted);
+  min-height: 92px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.stagecard .count { display: block; font-size: 2rem; font-weight: 800; line-height: 1.1; }
+.stagecard .slabel { font-size: .88rem; color: var(--muted); font-weight: 600; margin-top: .15rem; }
+.stagecard.st-new { border-top-color: var(--stage-new); }
+.stagecard.st-contacted { border-top-color: var(--stage-contacted); }
+.stagecard.st-appointment { border-top-color: var(--stage-appointment); }
+.stagecard.st-offer { border-top-color: var(--stage-offer); }
+.stagecard.st-negotiation { border-top-color: var(--stage-negotiation); }
+.stagecard.st-closed_won { border-top-color: var(--stage-closed_won); }
+.stagecard.st-closed_lost { border-top-color: var(--stage-closed_lost); }
+
+/* Stage stepper on lead detail */
+.stepper { display: flex; gap: .45rem; overflow-x: auto; padding: .2rem 0 .6rem; -webkit-overflow-scrolling: touch; }
+.stepper .btn { flex: 0 0 auto; font-size: .92rem; padding: .7rem .9rem; min-height: 48px; margin: 0; }
+.stepper .btn.done { background: var(--brand-soft); color: var(--brand-dark); }
+
+/* Contact hero */
+.contactcard {
+  background: linear-gradient(160deg, #eaf7ee, #d9efdf);
+  border: 1px solid #bfe3c9;
+  border-radius: var(--radius);
+  padding: 1.2rem 1rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow);
+}
+.cname { font-size: 1.5rem; font-weight: 800; margin-bottom: .2rem; }
+.cphone { font-size: 1.15rem; font-weight: 700; color: var(--brand-dark); margin-bottom: .6rem; }
+.callrow { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin-top: .6rem; }
+.callrow .btn { margin: 0; }
+
+/* Number tiles */
+.numgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .6rem; margin-top: .8rem; }
+.numtile { background: var(--bg); border-radius: 12px; padding: .6rem .8rem; }
+.numtile .k { font-size: .78rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.numtile .v { font-size: 1.25rem; font-weight: 800; }
+
+/* Filter chips */
+.chips { display: flex; gap: .5rem; overflow-x: auto; padding: .2rem 0 .8rem; -webkit-overflow-scrolling: touch; }
+.chip {
+  flex: 0 0 auto;
+  padding: .65rem 1rem;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 650;
+  font-size: .95rem;
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  box-shadow: var(--shadow);
+}
+.chip.on { background: var(--brand-dark); color: #fff; border-color: var(--brand-dark); }
+
+/* Forms */
+.form label { display: block; margin-bottom: .9rem; font-weight: 650; font-size: 1rem; }
+.form input, .form select, .form textarea {
+  display: block;
+  width: 100%;
+  margin-top: .3rem;
+  font-size: 1.1rem;
+  padding: .85rem;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font-family: inherit;
+}
+.form input:focus, .form select:focus, .form textarea:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+/* Scripts */
+details.script summary { cursor: pointer; font-size: 1.05rem; padding: .4rem 0; min-height: 48px; }
+.scriptbody {
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 1.02rem;
+  background: var(--bg);
+  padding: .9rem;
+  border-radius: 12px;
+  margin-top: .5rem;
+  line-height: 1.55;
+}
+
+/* Bottom tab bar */
+.tabbar {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  height: var(--tabbar-h);
+  background: var(--card);
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  z-index: 30;
+  padding-bottom: env(safe-area-inset-bottom);
+  box-shadow: 0 -2px 12px rgba(20, 32, 26, .06);
+}
+.tabbar a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-decoration: none;
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 650;
+  min-height: 100%;
+}
+.tabbar a .ico { font-size: 1.35rem; line-height: 1; }
+.tabbar a.on { color: var(--brand-dark); }
+.tabbar a.add .ico {
+  background: var(--brand);
+  color: #fff;
+  width: 46px; height: 46px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.7rem;
+  margin-top: -14px;
+  box-shadow: 0 4px 10px rgba(21, 128, 61, .35);
+}
+
+/* Lead rows */
+.leadrow { display: block; text-decoration: none; color: inherit; }
+.leadrow .top { display: flex; justify-content: space-between; align-items: flex-start; gap: .6rem; }
+.stagepill {
+  flex: 0 0 auto;
+  font-size: .75rem;
+  font-weight: 750;
+  padding: .3rem .65rem;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--muted);
+}
+.stagepill.st-new { background: var(--stage-new); }
+.stagepill.st-contacted { background: var(--stage-contacted); }
+.stagepill.st-appointment { background: var(--stage-appointment); }
+.stagepill.st-offer { background: var(--stage-offer); }
+.stagepill.st-negotiation { background: var(--stage-negotiation); }
+.stagepill.st-closed_won { background: var(--stage-closed_won); }
+.stagepill.st-closed_lost { background: var(--stage-closed_lost); }
+.contactline { margin-top: .5rem; font-size: 1.02rem; }
+a.tel { color: var(--brand-dark); font-weight: 750; text-decoration: none; }
+.mini-call {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  font-weight: 750;
+  padding: .55rem .9rem;
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: .95rem;
+  min-height: 44px;
+  margin-top: .4rem;
+}
+
+/* Contract list */
+.clist { list-style: none; padding: 0; margin: .5rem 0 0; }
+.clist li { padding: .6rem 0; border-top: 1px solid var(--line); font-size: .95rem; }
+
+@media (min-width: 640px) {
+  .stagegrid { grid-template-columns: repeat(4, 1fr); }
+  .wrap { padding: 1.5rem 1.5rem 3rem; }
+}

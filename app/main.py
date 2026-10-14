@@ -18,9 +18,19 @@ app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), na
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 
+def _tab_for(path: str) -> str:
+    if path.startswith("/scripts"):
+        return "scripts"
+    if path.startswith("/scrapers"):
+        return "tools"
+    if path.startswith("/leads"):
+        return "leads"
+    return "home"
+
+
 def ctx(request: Request, **kw):
     base = {"request": request, "stages": db.STAGES, "stage_labels": db.STAGE_LABELS,
-            "backend": db.backend_name()}
+            "backend": db.backend_name(), "tab": _tab_for(request.url.path)}
     base.update(kw)
     return base
 

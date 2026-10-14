@@ -1,23 +1,31 @@
 {% extends "base.html" %}
+{% block title %}Leads - Wholesale Deals{% endblock %}
 {% block content %}
-<h1>Leads{% if active_stage %} &middot; {{ stage_labels[active_stage] }}{% endif %}</h1>
-<p><a class="btn" href="/leads/new">+ Add lead</a> <a class="btn ghost" href="/leads">All</a></p>
+<h1>Leads</h1>
+<div class="chips">
+  <a class="chip{% if not active_stage %} on{% endif %}" href="/leads">All</a>
+  {% for s in stages %}
+  <a class="chip{% if active_stage == s %} on{% endif %}" href="/leads?stage={{ s }}">{{ stage_labels[s] }}</a>
+  {% endfor %}
+</div>
 {% for l in leads %}
-<div class="card leadrow">
-  <a class="addr" href="/leads/{{ l.id }}">{{ l.address }}</a>
-  <div class="meta">{{ l.city }} &middot; {{ stage_labels.get(l.stage, l.stage) }} &middot; {{ l.source }}
-  {% if l.asking_price %}&middot; ${{ "%.0f"|format(l.asking_price) }}{% endif %}</div>
+<a class="card leadrow" href="/leads/{{ l.id }}">
+  <div class="top">
+    <span class="addr">{{ l.address }}</span>
+    <span class="stagepill st-{{ l.stage }}">{{ stage_labels.get(l.stage, l.stage) }}</span>
+  </div>
+  <div class="meta">{{ l.city }}{% if l.asking_price %} &middot; ${{ "%.0f"|format(l.asking_price) }}{% endif %} &middot; {{ l.source }}</div>
   {% if l.owners %}
     {% for o in l.owners %}
     <div class="contactline">
       <strong>{{ o.name or "Unknown" }}</strong>
-      {% if o.phone %} &middot; <a class="tel" href="tel:{{ o.phone|replace(' ', '')|replace('-', '')|replace('(', '')|replace(')', '') }}">&#9742; {{ o.phone }}</a>{% endif %}
+      {% if o.phone %}<br><a class="mini-call" href="tel:{{ o.phone|replace(' ', '')|replace('-', '')|replace('(', '')|replace(')', '') }}">&#9742; {{ o.phone }}</a>{% endif %}
     </div>
     {% endfor %}
   {% endif %}
   {% if l.tags %}<div class="tags">{{ l.tags }}</div>{% endif %}
-</div>
+</a>
 {% else %}
-<p class="muted">No leads here yet.</p>
+<div class="card"><p class="muted">No leads here yet.</p></div>
 {% endfor %}
 {% endblock %}

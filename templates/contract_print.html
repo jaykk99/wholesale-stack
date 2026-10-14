@@ -7,8 +7,8 @@
 <link rel="stylesheet" href="/static/style.css">
 <style>
 @media print {
-  .noprint, .topbar, .foot { display: none !important; }
-  body { font-size: 12pt; }
+  .noprint, .topbar, .foot, .tabbar { display: none !important; }
+  body { font-size: 12pt; padding-bottom: 0; background: #fff; }
 }
 .contract { max-width: 700px; margin: 0 auto; line-height: 1.6; }
 .contract h2 { text-align: center; }
@@ -21,9 +21,9 @@
   <a href="/leads/{{ lead.id }}" class="brand">&larr; Back to lead</a>
 </header>
 <main class="wrap">
-<div class="noprint">
+<div class="noprint" style="margin-bottom:1rem">
   <button class="btn big primary" onclick="window.print()">Print / Save PDF</button>
-  <p class="muted">Saved to this lead's record. Templates are not legal advice - have a local lawyer review before use.</p>
+  <p class="muted">Saved to this lead's record. Templates are not legal advice. Have a local lawyer review before use.</p>
 </div>
 <div class="contract">{{ contract_html|safe }}</div>
 </main>
