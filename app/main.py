@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from . import db
-from . import call_scripts, contracts, exits
+from . import call_scripts, contracts, exits, training_md
 from .scrapers import SCRAPERS, run_scraper
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -53,6 +53,8 @@ def _tab_for(path: str) -> str:
         return "contracts"
     if path.startswith("/buyers"):
         return "buyers"
+    if path.startswith("/training"):
+        return "training"
     if path.startswith("/playbook"):
         return "tools"
     if path.startswith("/leads"):
@@ -194,6 +196,18 @@ def contract_pick_lead(request: Request, template_id: str):
 @app.get("/playbook", response_class=HTMLResponse)
 def playbook_page(request: Request):
     return templates.TemplateResponse(request, "playbook.html", ctx(request))
+
+
+@app.get("/training", response_class=HTMLResponse)
+def training_page(request: Request):
+    guide_path = os.path.join(BASE_DIR, "AMANDA_TRAINING_GUIDE.md")
+    try:
+        with open(guide_path, encoding="utf-8") as f:
+            md = f.read()
+    except OSError:
+        md = "# Training Guide\n\nGuide file not found."
+    return templates.TemplateResponse(request, "training.html",
+                                      ctx(request, guide_html=training_md.render(md)))
 
 
 @app.get("/scrapers", response_class=HTMLResponse)

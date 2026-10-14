@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Training Guide - Wholesale Deals{% endblock %}
+{% block content %}
+<div class="training">
+{{ guide_html | safe }}
+</div>
+<style>
+.training { max-width: 720px; }
+.training h1 { font-size: 1.6rem; margin-bottom: .25rem; }
+.training h2 { font-size: 1.25rem; margin-top: 2rem; border-bottom: 2px solid #eee; padding-bottom: .3rem; }
+.training p, .training li { line-height: 1.65; }
+.training ul, .training ol { padding-left: 1.4rem; }
+.training li { margin-bottom: .35rem; }
+.training hr { margin: 2rem 0; border: none; border-top: 1px solid #ddd; }
+.training strong { color: #111; }
+</style>
+{% endblock %}
