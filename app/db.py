@@ -115,7 +115,11 @@ def _lite() -> sqlite3.Connection:
     return conn
 
 
-def _now() -> float:
+def _now() -> float | str:
+    # Supabase timestamptz columns need ISO strings; SQLite REAL columns take floats.
+    if USE_SUPABASE:
+        from datetime import datetime, timezone
+        return datetime.now(timezone.utc).isoformat()
     return time.time()
 
 
@@ -127,7 +131,7 @@ def list_leads() -> list[dict]:
         deals = {d["lead_id"]: d for d in sb_get(T_DEALS)}
         for l in leads:
             l["stage"] = deals.get(l["id"], {}).get("stage", "new")
-            l[T_OWNERS] = sb_get(T_OWNERS, {"lead_id": f"eq.{l['id']}"})
+            l["owners"] = sb_get(T_OWNERS, {"lead_id": f"eq.{l['id']}"})
         return leads
     conn = _lite()
     rows = conn.execute(
@@ -151,9 +155,9 @@ def get_lead(lead_id: int) -> dict | None:
         deals = sb_get(T_DEALS, {"lead_id": f"eq.{lead_id}"})
         lead["stage"] = deals[0]["stage"] if deals else "new"
         lead["offer_amount"] = deals[0].get("offer_amount") if deals else None
-        lead[T_OWNERS] = sb_get(T_OWNERS, {"lead_id": f"eq.{lead_id}"})
-        lead[T_CALLS] = sb_get(T_CALLS, {"lead_id": f"eq.{lead_id}", "order": "called_at.desc"})
-        lead[T_NOTES] = sb_get(T_NOTES, {"lead_id": f"eq.{lead_id}", "order": "created_at.desc"})
+        lead["owners"] = sb_get(T_OWNERS, {"lead_id": f"eq.{lead_id}"})
+        lead["calls"] = sb_get(T_CALLS, {"lead_id": f"eq.{lead_id}", "order": "called_at.desc"})
+        lead["notes"] = sb_get(T_NOTES, {"lead_id": f"eq.{lead_id}", "order": "created_at.desc"})
         lead["contracts"] = list_contracts(lead_id)
         return lead
     conn = _lite()
