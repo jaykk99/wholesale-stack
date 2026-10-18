@@ -453,10 +453,3 @@ Meet in the middle only if it is still at or below your maximum offer. Never go 
 
 def scripts_for_stage(stage: str) -> list[dict]:
     return [s for s in SCRIPTS if stage in s["stages"]]
-
-
-def get_script(script_id: str) -> dict | None:
-    for s in SCRIPTS:
-        if s["id"] == script_id:
-            return s
-    return None
