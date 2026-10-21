@@ -2,6 +2,7 @@
 {% block title %}Pipeline - Wholesale Deals{% endblock %}
 {% block content %}
 <h1>Pipeline</h1>
+{% if data_error %}<p class="warn">{{ data_error }}</p>{% endif %}
 <div class="stagegrid">
 {% for s in stages %}
   <a class="stagecard st-{{ s }}" href="/leads?stage={{ s }}">

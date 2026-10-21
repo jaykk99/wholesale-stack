@@ -188,3 +188,31 @@ def test_exit_strategies_count():
 
 def test_exit_strategies_need_arv():
     assert exits.exit_strategies({"asking_price": 120000}) == []
+
+
+# ---------- dashboard resilience ----------
+
+def test_dashboard_degrades_when_backend_fails():
+    """A failing backend query must not 500 the dashboard: it renders an
+    empty board with a warning instead."""
+    from starlette.testclient import TestClient
+    from app import main
+    real = (main.db.pipeline_counts, main.db.list_leads, main.db.due_followups)
+    main.db.pipeline_counts = lambda: (_ for _ in ()).throw(RuntimeError("backend down"))
+    try:
+        client = TestClient(main.app, raise_server_exceptions=False)
+        r = client.get("/")
+        assert r.status_code == 200, r.text[:200]
+        assert "temporarily unavailable" in r.text
+    finally:
+        (main.db.pipeline_counts, main.db.list_leads,
+         main.db.due_followups) = real
+
+
+def test_dashboard_renders_ok_when_backend_works():
+    from starlette.testclient import TestClient
+    from app import main
+    client = TestClient(main.app, raise_server_exceptions=False)
+    r = client.get("/")
+    assert r.status_code == 200, r.text[:200]
+    assert "Pipeline" in r.text

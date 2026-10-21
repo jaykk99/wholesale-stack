@@ -349,3 +349,4 @@ a.tel { color: var(--brand-dark); font-weight: 750; text-decoration: none; }
 .verdict-tight { border-left: 5px solid #e07b00; }
 .verdict-no-deal { border-left: 5px solid #c0392b; }
 .verdict-need-arv { border-left: 5px solid #8a8a8a; }
+.warn { background: #fff3cd; border: 1px solid #d9a400; border-radius: 8px; padding: 10px 14px; margin: 10px 0; }

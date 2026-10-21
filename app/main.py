@@ -1,4 +1,5 @@
 """Wholesale Stack - FastAPI CRM for real-estate wholesaling. Phone-friendly."""
+import logging
 import os
 import threading
 import time
@@ -12,6 +13,8 @@ from . import db
 from . import analyzer as deal_analyzer
 from . import call_scripts, contracts, exits, training_md
 from .scrapers import SCRAPERS, run_scraper
+
+log = logging.getLogger("wholesale")
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 app = FastAPI(title="Wholesale Stack")
@@ -75,9 +78,19 @@ def ctx(request: Request, **kw):
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
+    # The dashboard must never 500 because one backend query is slow/down
+    # (e.g. Supabase REST timing out): degrade to an empty board and log it.
+    try:
+        counts = db.pipeline_counts()
+        leads = db.list_leads()
+        due = db.due_followups()
+        data_error = ""
+    except Exception:
+        log.exception("dashboard: backend query failed, rendering degraded board")
+        counts, leads, due = {}, [], []
+        data_error = "Live data temporarily unavailable — showing an empty board."
     return templates.TemplateResponse(request, "index.html", ctx(
-        request, counts=db.pipeline_counts(), leads=db.list_leads(),
-        due=db.due_followups()))
+        request, counts=counts, leads=leads, due=due, data_error=data_error))
 
 
 @app.get("/leads", response_class=HTMLResponse)
