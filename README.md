@@ -12,7 +12,11 @@ A wholesaling CRM for closing real estate deals from your phone. Lead scraping, 
 - **CRM** (FastAPI + phone-friendly pages): lead list with contact name + tap-to-call phone numbers, lead detail, pipeline stages (New Lead through Closed Won/Lost), call log, notes, tags.
 - **Call scripts library**: cold call, follow-up, four objection handlers (price too low, just looking, spouse approval, timeline), making the offer, closing. The right script shows automatically on each lead page based on its pipeline stage.
 - **Contracts**: fillable purchase agreement, assignment of contract, and earnest money receipt. Fields auto-fill from the deal (seller, property, price). Printable from the phone.
+- **Deal Analyzer** (`/analyzer`, `app/analyzer.py`): interactive MAO calculator — ARV, asking, repairs, closing/holding costs, target fee → max offer, spread, and a deal/thin/tight/no-deal verdict with the full math shown. Prefills from any lead via "Analyze this deal".
+- **Lead scoring**: every lead gets a 0-100 hot/warm/cold score (motivation + spread + phone + stage progress - stale penalty); `/leads?sort=score` sorts hottest first.
+- **Follow-up reminders**: set a date + note on any lead; overdue follow-ups surface on the dashboard.
 - **Automation**: docker-compose bundles n8n (Community Edition) with two example workflows (daily scrape to CRM, stale-lead follow-up reminders). No-Docker fallback: the app has its own tiny scheduler (`ENABLE_SCHEDULER=1`).
+- **Tests**: `python3 -m pytest tests/` — 22 tests (analyzer math, payout, scoring, follow-ups, buyer matching, exit strategies).
 
 ## Lead sources (honest status, tested 2026-10-14)
 

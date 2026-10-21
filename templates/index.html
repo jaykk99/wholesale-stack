@@ -11,6 +11,20 @@
 {% endfor %}
 </div>
 <a class="btn big primary" href="/leads/new">+ Add lead</a>
+
+{% if due %}
+<h2>⏰ Follow-ups due</h2>
+{% for l in due %}
+<a class="card leadrow" href="/leads/{{ l.id }}">
+  <div class="top">
+    <span class="addr">{{ l.address }}</span>
+    <span class="stagepill st-{{ l.stage }}">{{ stage_labels.get(l.stage, l.stage) }}</span>
+  </div>
+  <div class="meta">Follow up: <strong>{{ l.next_followup }}</strong>{% if l.followup_note %} — {{ l.followup_note }}{% endif %}</div>
+</a>
+{% endfor %}
+{% endif %}
+
 <h2>Latest leads</h2>
 {% for l in leads[:10] %}
 <a class="card leadrow" href="/leads/{{ l.id }}">

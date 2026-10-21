@@ -179,7 +179,21 @@ def _lite() -> sqlite3.Connection:
     conn = sqlite3.connect(SQLITE_PATH)
     conn.row_factory = sqlite3.Row
     conn.executescript(_SCHEMA)
+    _ensure_columns(conn)
     return conn
+
+
+def _ensure_columns(conn: sqlite3.Connection) -> None:
+    """Lightweight migrations for columns added after the initial schema."""
+    for ddl in (
+        "ALTER TABLE leads ADD COLUMN next_followup TEXT",
+        "ALTER TABLE leads ADD COLUMN followup_note TEXT DEFAULT ''",
+    ):
+        try:
+            conn.execute(ddl)
+        except sqlite3.OperationalError:
+            pass  # column already exists
+    conn.commit()
 
 
 def _now() -> float | str:
@@ -347,6 +361,114 @@ def add_note(lead_id: int, body: str) -> dict:
     conn.close()
     row["id"] = nid
     return row
+
+
+# ---------------- Follow-up reminders ----------------
+
+_FOLLOWUP_RE = None
+
+
+def _valid_followup_date(s: str) -> bool:
+    import re
+    return bool(re.match(r"^\d{4}-\d{2}-\d{2}$", s or ""))
+
+
+def set_followup(lead_id: int, date_iso: str, note: str = "") -> dict | None:
+    """Set (or clear) a follow-up reminder on a lead. date_iso is YYYY-MM-DD."""
+    date_iso = (date_iso or "").strip()
+    if date_iso and not _valid_followup_date(date_iso):
+        raise ValueError("follow-up date must be YYYY-MM-DD")
+    note = (note or "").strip()[:500]
+    if USE_SUPABASE:
+        sb_patch(T_LEADS, {"id": f"eq.{lead_id}"},
+                 {"next_followup": date_iso or None, "followup_note": note})
+    else:
+        conn = _lite()
+        conn.execute("UPDATE leads SET next_followup=?, followup_note=?, updated_at=? WHERE id=?",
+                     (date_iso or None, note, _now(), lead_id))
+        conn.commit()
+        conn.close()
+    return get_lead(lead_id)
+
+
+def due_followups() -> list[dict]:
+    """Leads with a follow-up date of today or earlier, excluding closed deals."""
+    if USE_SUPABASE:
+        from datetime import date
+        leads = sb_get(T_LEADS, {"next_followup": f"lte.{date.today().isoformat()}"})
+        deals = {d["lead_id"]: d for d in sb_get(T_DEALS)}
+        out = []
+        for l in leads:
+            stage = deals.get(l["id"], {}).get("stage", "new")
+            if stage in ("closed_won", "closed_lost"):
+                continue
+            l["stage"] = stage
+            out.append(l)
+        out.sort(key=lambda l: l.get("next_followup") or "")
+        return out
+    conn = _lite()
+    rows = conn.execute(
+        """SELECT l.*, COALESCE(d.stage,'new') AS stage FROM leads l
+           LEFT JOIN deals d ON d.lead_id = l.id
+           WHERE l.next_followup IS NOT NULL AND l.next_followup != ''
+             AND l.next_followup <= date('now')
+             AND COALESCE(d.stage,'new') NOT IN ('closed_won','closed_lost')
+           ORDER BY l.next_followup ASC"""
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# ---------------- Lead scoring ----------------
+
+MOTIVATION_SCORE = {
+    "probate": 25,
+    "pre_foreclosure": 25,
+    "tired_landlord": 20,
+    "absentee": 15,
+    "standard": 10,
+}
+
+
+def lead_score(lead: dict) -> dict:
+    """Score a lead 0-100 so the hottest deals sort first.
+
+    Motivation (up to 25) + spread room (up to 30) + has phone (15)
+    + pipeline progress (up to 15) - stale penalty (up to 10).
+    """
+    score = MOTIVATION_SCORE.get(lead.get("motivation") or "standard", 10)
+    reasons = []
+    pe = payout_estimate(lead)
+    if pe["ready"] and pe["spread"] > 0:
+        pts = min(30, int(pe["spread"] / 1000))
+        score += pts
+        reasons.append(f"${pe['spread']:,} spread (+{pts})")
+    owners = lead.get("owners") or []
+    if any((o.get("phone") or "").strip() for o in owners):
+        score += 15
+        reasons.append("has phone (+15)")
+    stage = lead.get("stage", "new")
+    if stage in STAGES:
+        pts = min(15, STAGES.index(stage) * 3)
+        score += pts
+        if pts:
+            reasons.append(f"stage {stage} (+{pts})")
+    # stale: no update in 21+ days
+    try:
+        updated = float(lead.get("updated_at") or 0)
+        if updated and (time.time() - updated) > 21 * 86400:
+            score -= 10
+            reasons.append("stale 21+ days (-10)")
+    except (TypeError, ValueError):
+        pass
+    score = max(0, min(100, score))
+    if score >= 70:
+        band = "hot"
+    elif score >= 40:
+        band = "warm"
+    else:
+        band = "cold"
+    return {"score": score, "band": band, "reasons": reasons}
 
 
 def pipeline_counts() -> dict:

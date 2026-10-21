@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Deal Analyzer - Wholesale Deals{% endblock %}
+{% block content %}
+<h1>Deal Analyzer</h1>
+<p class="muted">Run the numbers before you make an offer. MAO = 70% of ARV, minus repairs and costs.</p>
+
+<form method="post" action="/analyzer" class="form card">
+  <label>Property address (optional)
+    <input name="address" type="text" value="{{ prefill.address or '' }}" placeholder="123 Main St">
+  </label>
+  <label>After-repair value (ARV) *
+    <input name="arv" type="text" inputmode="decimal" value="{{ prefill.arv or '' }}" placeholder="250000" required>
+  </label>
+  <label>Asking price
+    <input name="asking" type="text" inputmode="decimal" value="{{ prefill.asking or '' }}" placeholder="180000">
+  </label>
+  <label>Repair estimate
+    <input name="repairs" type="text" inputmode="decimal" value="{{ prefill.repairs or '' }}" placeholder="30000">
+  </label>
+  <label>Closing costs
+    <input name="closing_costs" type="text" inputmode="decimal" value="{{ prefill.closing_costs or '' }}" placeholder="5000">
+  </label>
+  <label>Holding costs
+    <input name="holding_costs" type="text" inputmode="decimal" value="{{ prefill.holding_costs or '' }}" placeholder="3000">
+  </label>
+  <label>Target assignment fee
+    <input name="desired_fee" type="text" inputmode="decimal" value="{{ prefill.desired_fee or '10000' }}" placeholder="10000">
+  </label>
+  <button class="btn big primary" type="submit">Analyze</button>
+</form>
+
+{% if result and result.ready %}
+<div class="card verdict-{{ result.verdict }}" style="margin-top:1rem">
+  <h2 style="margin-top:0">
+    {% if result.verdict == "deal" %}✅ Deal — make the offer
+    {% elif result.verdict == "thin" %}⚠️ Thin — negotiate hard
+    {% elif result.verdict == "tight" %}🔶 Tight — get the price down
+    {% else %}🚫 No deal at this price
+    {% endif %}
+  </h2>
+  <p>{{ result.verdict_detail }}</p>
+</div>
+
+<div class="card" style="margin-top:1rem">
+  <h2 style="margin-top:0">The math</h2>
+  <table class="numtable">
+    {% for label, v in result.lines %}
+    <tr class="{% if loop.last %}total{% endif %}">
+      <td>{{ label }}</td>
+      <td class="r">{{ fmt(v) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card" style="margin-top:1rem">
+  <h2 style="margin-top:0">Offer guidance</h2>
+  <p><strong>Offer {{ fmt(result.offer_for_fee) }}</strong> to keep your {{ fmt(result.desired_fee) }} fee intact.</p>
+  {% if result.asking %}
+  <p>At the asking price of {{ fmt(result.asking) }}, your captured fee would be
+    <strong style="color:{{ 'green' if result.fee_at_asking >= result.desired_fee else '#c90' }}">{{ fmt(result.fee_at_asking) }}</strong>.</p>
+  {% endif %}
+</div>
+{% elif result %}
+<div class="card" style="margin-top:1rem">
+  <p class="muted">{{ result.verdict_detail }}</p>
+</div>
+{% endif %}
+{% endblock %}

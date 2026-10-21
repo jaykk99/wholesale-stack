@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from . import db
+from . import analyzer as deal_analyzer
 from . import call_scripts, contracts, exits, training_md
 from .scrapers import SCRAPERS, run_scraper
 
@@ -57,6 +58,8 @@ def _tab_for(path: str) -> str:
         return "training"
     if path.startswith("/playbook"):
         return "tools"
+    if path.startswith("/analyzer"):
+        return "tools"
     if path.startswith("/leads"):
         return "leads"
     return "home"
@@ -73,19 +76,24 @@ def ctx(request: Request, **kw):
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
     return templates.TemplateResponse(request, "index.html", ctx(
-        request, counts=db.pipeline_counts(), leads=db.list_leads()))
+        request, counts=db.pipeline_counts(), leads=db.list_leads(),
+        due=db.due_followups()))
 
 
 @app.get("/leads", response_class=HTMLResponse)
-def leads_page(request: Request, stage: str = ""):
+def leads_page(request: Request, stage: str = "", sort: str = ""):
     leads = db.list_leads()
     if stage in db.STAGES:
         leads = [l for l in leads if l.get("stage") == stage]
     for l in leads:
         l["payout"] = db.payout_estimate(l)
+        l["score"] = db.lead_score(l)
         dt = db.DEAL_TYPES.get(l.get("motivation") or "standard", db.DEAL_TYPES["standard"])
         l["deal_label"] = dt["label"]
-    return templates.TemplateResponse(request, "leads.html", ctx(request, leads=leads, active_stage=stage))
+    if sort == "score":
+        leads.sort(key=lambda l: l["score"]["score"], reverse=True)
+    return templates.TemplateResponse(request, "leads.html", ctx(
+        request, leads=leads, active_stage=stage, sort=sort))
 
 
 @app.get("/leads/new", response_class=HTMLResponse)
@@ -143,6 +151,45 @@ def add_call(lead_id: int, outcome: str = Form(...), notes: str = Form(""), dura
 def add_note(lead_id: int, body: str = Form(...)):
     db.add_note(lead_id, body.strip())
     return RedirectResponse(f"/leads/{lead_id}", status_code=303)
+
+
+@app.post("/leads/{lead_id}/followup")
+def set_followup(lead_id: int, next_followup: str = Form(""), followup_note: str = Form("")):
+    db.set_followup(lead_id, next_followup, followup_note)
+    return RedirectResponse(f"/leads/{lead_id}", status_code=303)
+
+
+# ---------------- Deal analyzer ----------------
+
+@app.get("/analyzer", response_class=HTMLResponse)
+def analyzer_page(request: Request, lead_id: int = 0):
+    prefill = {}
+    if lead_id:
+        lead = db.get_lead(lead_id)
+        if lead:
+            prefill = {
+                "arv": lead.get("arv_estimate") or "",
+                "asking": lead.get("asking_price") or "",
+                "repairs": lead.get("repair_estimate") or "",
+                "address": lead.get("address") or "",
+            }
+    return templates.TemplateResponse(request, "analyzer.html", ctx(
+        request, prefill=prefill, result=None, fmt=deal_analyzer.fmt))
+
+
+@app.post("/analyzer", response_class=HTMLResponse)
+def analyzer_run(
+    request: Request,
+    arv: str = Form(""), asking: str = Form(""), repairs: str = Form(""),
+    closing_costs: str = Form(""), holding_costs: str = Form(""),
+    desired_fee: str = Form("10000"), address: str = Form(""),
+):
+    result = deal_analyzer.analyze(arv, asking, repairs, closing_costs, holding_costs, desired_fee)
+    prefill = {"arv": arv, "asking": asking, "repairs": repairs,
+               "closing_costs": closing_costs, "holding_costs": holding_costs,
+               "desired_fee": desired_fee, "address": address}
+    return templates.TemplateResponse(request, "analyzer.html", ctx(
+        request, prefill=prefill, result=result, fmt=deal_analyzer.fmt))
 
 
 @app.get("/scripts", response_class=HTMLResponse)

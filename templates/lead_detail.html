@@ -43,7 +43,8 @@
   <p class="muted" style="margin-top:0">
     <a href="{{ deal_type.playbook }}">How-to guide</a> &middot;
     <a href="/scripts">What to say</a> &middot;
-    <a href="#contracts">Which contract</a>
+    <a href="#contracts">Which contract</a> &middot;
+    <a href="/analyzer?lead_id={{ lead.id }}"><strong>Analyze this deal</strong></a>
   </p>
   {% if lead.tags %}<p class="tags" style="margin-bottom:0">{{ lead.tags }}</p>{% endif %}
   {% if lead.source_url %}<p style="margin-bottom:0"><a href="{{ lead.source_url }}" target="_blank" rel="noopener">View original listing</a></p>{% endif %}
@@ -164,6 +165,18 @@ function filterExits() {
 </ul>
 {% endif %}
 </div>
+
+<h2>Follow-up reminder</h2>
+<form method="post" action="/leads/{{ lead.id }}/followup" class="form card">
+  {% if lead.next_followup %}<p><strong>Reminder set for {{ lead.next_followup }}</strong>{% if lead.followup_note %} — {{ lead.followup_note }}{% endif %}</p>{% endif %}
+  <label>Date
+    <input name="next_followup" type="date" value="{{ lead.next_followup or '' }}">
+  </label>
+  <label>Note
+    <input name="followup_note" type="text" maxlength="500" value="{{ lead.followup_note or '' }}" placeholder="Why are we following up?">
+  </label>
+  <button class="btn primary" type="submit">Save reminder</button>
+</form>
 
 <h2>Log a call</h2>
 <form method="post" action="/leads/{{ lead.id }}/calls" class="form card">
