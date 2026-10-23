@@ -1,8 +1,11 @@
 """Wholesale Stack - FastAPI CRM for real-estate wholesaling. Phone-friendly."""
+import base64
+import hmac
 import logging
 import os
 import threading
 import time
+from urllib.parse import urlencode
 
 from fastapi import FastAPI, Form, Request
 from fastapi.concurrency import run_in_threadpool
@@ -12,7 +15,7 @@ from fastapi.templating import Jinja2Templates
 
 from . import db
 from . import analyzer as deal_analyzer
-from . import automation, call_scripts, contracts, exits, training_md
+from . import automation, call_scripts, contracts, error_report, exits, training_md
 from .scrapers import SCRAPERS, run_scraper
 
 log = logging.getLogger("wholesale")
@@ -30,9 +33,8 @@ async def _vercel_path_fix(request: Request, call_next):
         scope = request.scope
         scope["path"] = qp
         scope["raw_path"] = qp.encode()
-        # drop __path from the query string
-        q = "&".join(f"{k}={v}" for k, vs in request.query_params.multi_items()
-                     for v in [vs] if k != "__path")
+        # drop __path from the query string (keep the remaining pairs percent-encoded)
+        q = urlencode([(k, v) for k, v in request.query_params.multi_items() if k != "__path"])
         scope["query_string"] = q.encode()
     elif scope_path := request.scope.get("path", ""):
         if scope_path == "/api/index":
@@ -43,6 +45,42 @@ async def _vercel_path_fix(request: Request, call_next):
             request.scope["path"] = np
             request.scope["raw_path"] = np.encode()
     return await call_next(request)
+
+
+# Open paths: health probe and the cron trigger (which checks its own secret).
+_OPEN_PATHS = ("/health", "/cron/run", "/static/")
+
+
+@app.middleware("http")
+async def _access_gate(request: Request, call_next):
+    """Optional HTTP Basic gate. Set APP_PASSWORD to protect the CRM (seller names
+    and phone numbers); any username works. Unset = open, as before."""
+    password = os.environ.get("APP_PASSWORD", "")
+    path = request.scope.get("path", "")
+    if password and not any(path == p or path.startswith(p) for p in _OPEN_PATHS):
+        given = ""
+        auth = request.headers.get("authorization", "")
+        if auth.lower().startswith("basic "):
+            try:
+                given = base64.b64decode(auth[6:]).decode().partition(":")[2]
+            except Exception:
+                given = ""
+        if not hmac.compare_digest(given.encode(), password.encode()):
+            return JSONResponse({"ok": False, "error": "login required"}, status_code=401,
+                                headers={"WWW-Authenticate": 'Basic realm="Wholesale Stack"'})
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def _report_crashes(request: Request, call_next):
+    """Last line of defence: report the crash to Error Inbox and show a friendly page."""
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        log.exception("unhandled error on %s %s", request.method, request.url.path)
+        error_report.report(exc, request.method, request.url.path)
+        return HTMLResponse("<h2>Something went wrong.</h2><p>It has been logged. "
+                            "<a href='/'>Back to the dashboard</a></p>", status_code=500)
 
 
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
@@ -346,7 +384,8 @@ async def run_scraper_endpoint(request: Request, name: str):
     try:
         found = run_scraper(name, **{k: v for k, v in form.items()})
     except Exception as e:
-        return {"ok": False, "error": str(e)}
+        log.exception("scraper %s failed", name)
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=502)
     automation.ingest(found)   # de-dupes by URL and address, auto-tags deal type
     return RedirectResponse("/leads?stage=new", status_code=303)
 
