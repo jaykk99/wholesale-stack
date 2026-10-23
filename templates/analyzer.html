@@ -4,7 +4,8 @@
 <h1>Deal Analyzer</h1>
 <p class="muted">Run the numbers before you make an offer. MAO = 70% of ARV, minus repairs and costs.</p>
 
-<form method="post" action="/analyzer" class="form card">
+<form method="post" action="/analyzer{% if prefill.lead_id %}?lead_id={{ prefill.lead_id }}{% endif %}" class="form card">
+{% if prefill.lead_id %}<p class="muted" style="margin-top:0">Numbers are saved to the lead when you run them.</p>{% endif %}
   <label>Property address (optional)
     <input name="address" type="text" value="{{ prefill.address or '' }}" placeholder="123 Main St">
   </label>

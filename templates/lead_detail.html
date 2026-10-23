@@ -50,6 +50,20 @@
   {% if lead.source_url %}<p style="margin-bottom:0"><a href="{{ lead.source_url }}" target="_blank" rel="noopener">View original listing</a></p>{% endif %}
 </div>
 
+<h2>Ready-to-send messages</h2>
+<div class="card">
+  <p class="muted" style="margin-top:0">Lead score <strong class="scorepill {{ score.band }}">{{ score.score }}</strong> {% if score.reasons %}&middot; {{ score.reasons|join(', ') }}{% endif %}</p>
+  <div class="k">Text to the seller</div>
+  <p class="draft">{{ drafts.seller_text }}</p>
+  <div class="callrow">
+    {% if drafts.seller_sms %}<a class="btn text" href="{{ drafts.seller_sms }}">&#9993; Open in Messages</a>{% endif %}
+    {% if drafts.seller_mail %}<a class="btn text" href="{{ drafts.seller_mail }}">&#128231; Open in Mail</a>{% endif %}
+    {% if not drafts.seller_sms and not drafts.seller_mail %}<span class="muted">Add the seller's number to send this in one tap.</span>{% endif %}
+  </div>
+  <div class="k" style="margin-top:1rem">Buyer blast (once it's under contract)</div>
+  <p class="draft">{{ drafts.buyer_blast }}</p>
+</div>
+
 <h2>Sell: matched buyers</h2>
 {% if not buyers_ready %}
 <div class="card" style="border-left:4px solid #c90">

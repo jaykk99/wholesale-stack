@@ -350,3 +350,25 @@ a.tel { color: var(--brand-dark); font-weight: 750; text-decoration: none; }
 .verdict-no-deal { border-left: 5px solid #c0392b; }
 .verdict-need-arv { border-left: 5px solid #8a8a8a; }
 .warn { background: #fff3cd; border: 1px solid #d9a400; border-radius: 8px; padding: 10px 14px; margin: 10px 0; }
+
+/* ---- automation: Today queue, drafts, score pills ---- */
+.task .top { display: flex; justify-content: space-between; align-items: flex-start; gap: .6rem; }
+.task .addr { font-weight: 700; color: var(--ink); text-decoration: none; }
+.task { border-left: 4px solid var(--stage-new); }
+.task.k-blast_buyers { border-left-color: var(--stage-closed_won); }
+.task.k-find_contact { border-left-color: var(--stage-contacted); }
+.task.k-analyze { border-left-color: var(--stage-appointment); }
+.task.k-review_stale { border-left-color: var(--stage-closed_lost); }
+form.inline { display: inline; margin: 0; }
+.chip { border: 1px solid var(--line); background: var(--card); border-radius: 999px; min-width: 2.4rem; min-height: 2.4rem; font-size: 1.05rem; cursor: pointer; }
+.chip.ok { color: var(--brand); border-color: var(--brand); }
+.draft { background: var(--brand-soft); border-radius: 12px; padding: .7rem .85rem; margin: .4rem 0; font-size: .95rem; white-space: pre-wrap; }
+.scorepill { display: inline-block; min-width: 2.2rem; text-align: center; border-radius: 999px; padding: .05rem .55rem; font-weight: 800; font-size: .85rem; color: #fff; background: #6b7280; }
+.scorepill.hot { background: #dc2626; } .scorepill.warm { background: #d97706; } .scorepill.cold { background: #6b7280; }
+.small { font-size: .82rem; }
+.statgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .6rem; }
+.stat { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: .8rem; }
+.stat .v { font-size: 1.4rem; font-weight: 800; } .stat .k { color: var(--muted); font-size: .8rem; }
+.runrow { display: flex; justify-content: space-between; gap: .5rem; font-size: .9rem; }
+.runrow .bad { color: #b91c1c; }
+@media (min-width: 560px) { .statgrid { grid-template-columns: repeat(4, 1fr); } }

@@ -1,0 +1,19 @@
+name: Autopilot ping
+# Wakes the app (free hosts sleep) and runs one automation cycle every 6 hours.
+# Set repo secrets WHOLESALE_URL (e.g. https://wholesale-stack.onrender.com) and CRON_SECRET (same as the app's).
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run autopilot
+        env:
+          URL: ${{ secrets.WHOLESALE_URL }}
+          SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$URL" ] || [ -z "$SECRET" ]; then echo "WHOLESALE_URL / CRON_SECRET not set - skipping"; exit 0; fi
+          curl -sS --retry 3 --retry-delay 20 --max-time 120 -o /dev/null "$URL/health" || true
+          curl -sS --fail --max-time 300 -X POST -H "X-Cron-Secret: $SECRET" "$URL/cron/run"

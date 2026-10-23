@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Autopilot - Wholesale Deals{% endblock %}
+{% block content %}
+<h1>Autopilot</h1>
+{% if ran == "1" %}<p class="card" style="border-left:4px solid var(--brand)">Done — new leads, follow-ups and today's tasks are updated.</p>{% endif %}
+{% if ran == "busy" %}<p class="warn">A run was already in progress. Give it a minute.</p>{% endif %}
+
+<div class="statgrid">
+  <div class="stat"><div class="v">{{ digest.open_leads }}</div><div class="k">Open leads</div></div>
+  <div class="stat"><div class="v">{{ digest.hot }}</div><div class="k">Hot leads</div></div>
+  <div class="stat"><div class="v">{{ digest.open_tasks }}</div><div class="k">Tasks waiting</div></div>
+  <div class="stat"><div class="v">${{ "{:,}".format(digest.pipeline_spread) }}</div><div class="k">Spread in pipeline</div></div>
+</div>
+
+<form method="post" action="/automation/run" style="margin:1rem 0">
+  <input type="hidden" name="scrape" value="1">
+  <button class="btn big primary">Run autopilot now</button>
+</form>
+
+<div class="card">
+  <h3 style="margin-top:0">What it does every {{ interval|round(1) }} hours</h3>
+  <ol style="margin:0;padding-left:1.2rem">
+    <li>Checks {{ sources|join(" and ")|replace("_", " ") }} and adds only <strong>new</strong> houses (no duplicates).</li>
+    <li>Reads each listing and tags the deal type (estate sale, power of sale, tenant-occupied, vacant…) and red flags like "as-is" or "price reduced".</li>
+    <li>Sets a follow-up date on any lead that has gone quiet for its stage.</li>
+    <li>Fills <a href="/">Today</a> with what to do next — call, find a number, run the numbers, or send to buyers — with the text already written.</li>
+  </ol>
+  <p class="muted small" style="margin-bottom:0">It never texts or emails anyone by itself. Every message opens in your own phone first.</p>
+  <p class="small" style="margin-bottom:0">Built-in timer: <strong>{{ "on" if enabled else "off" }}</strong> &middot;
+  Outside wake-up ping: <strong>{{ "ready" if cron_set else "not set (add CRON_SECRET)" }}</strong></p>
+</div>
+
+{% if not tasks_ready %}
+<div class="card" style="border-left:4px solid #c90"><strong>Database tables missing.</strong>
+  <p class="muted" style="margin:.4rem 0 0">Run <code>supabase/migrations/0004_automation.sql</code> in the Supabase SQL editor to keep the task list and run history.</p></div>
+{% endif %}
+
+<h2>Recent runs</h2>
+{% for r in runs %}
+<div class="card">
+  <div class="runrow"><strong>{{ r.when }}</strong><span class="muted">{{ r.trigger }} &middot; {{ r.summary.seconds }}s{% if not r.ok %} &middot; <span class="bad">failed</span>{% endif %}</span></div>
+  <div class="meta">
+    {% for name, src in (r.summary.sources or {}).items() %}
+      {{ name|replace("_", " ") }}: {% if src.error %}<span class="bad">unavailable</span>{% else %}{{ src.added }} new{% if src.duplicates %}, {{ src.duplicates }} already had{% endif %}{% endif %}{% if not loop.last %} &middot; {% endif %}
+    {% endfor %}
+  </div>
+  <div class="meta">{{ r.summary.tasks_created or 0 }} new tasks &middot; {{ r.summary.followups_set or 0 }} follow-ups set{% if r.summary.retagged %} &middot; {{ r.summary.retagged }} leads tagged{% endif %}</div>
+</div>
+{% else %}
+<div class="card"><p class="muted" style="margin:0">No runs yet. Tap “Run autopilot now”.</p></div>
+{% endfor %}
+{% endblock %}

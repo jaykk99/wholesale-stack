@@ -5,13 +5,14 @@ import threading
 import time
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from . import db
 from . import analyzer as deal_analyzer
-from . import call_scripts, contracts, exits, training_md
+from . import automation, call_scripts, contracts, exits, training_md
 from .scrapers import SCRAPERS, run_scraper
 
 log = logging.getLogger("wholesale")
@@ -59,6 +60,8 @@ def _tab_for(path: str) -> str:
         return "buyers"
     if path.startswith("/training"):
         return "training"
+    if path.startswith("/automation"):
+        return "tools"
     if path.startswith("/playbook"):
         return "tools"
     if path.startswith("/analyzer"):
@@ -89,8 +92,24 @@ def dashboard(request: Request):
         log.exception("dashboard: backend query failed, rendering degraded board")
         counts, leads, due = {}, [], []
         data_error = "Live data temporarily unavailable — showing an empty board."
+    # the automation queue is a bonus: never let it take the dashboard down
+    try:
+        queue = automation.today_queue(12)
+        runs = db.list_runs(1)
+    except Exception:
+        log.exception("dashboard: automation queue failed")
+        queue, runs = [], []
+    hot = []
+    for l in leads:
+        if l.get("stage") in automation.OPEN:
+            sc = db.lead_score(l)
+            if sc["band"] == "hot":
+                hot.append({**l, "score": sc})
+    hot.sort(key=lambda l: -l["score"]["score"])
     return templates.TemplateResponse(request, "index.html", ctx(
-        request, counts=counts, leads=leads, due=due, data_error=data_error))
+        request, counts=counts, leads=leads, due=due, data_error=data_error,
+        queue=queue, last_run=runs[0] if runs else None, hot=hot[:5],
+        tasks_ready=db.tasks_ready()))
 
 
 @app.get("/leads", response_class=HTMLResponse)
@@ -130,7 +149,21 @@ def lead_detail(request: Request, lead_id: int):
         outreach=db.buyer_outreach_for_lead(lead_id),
         exits=exits.exit_strategies(lead),
         buyers_ready=db.buyers_ready(),
+        drafts=_drafts_for(lead),
+        score=db.lead_score(lead),
     ))
+
+
+def _drafts_for(lead: dict) -> dict:
+    """Ready-to-send seller text / buyer blast for the lead page (opened in the phone's own apps)."""
+    out = {"seller_text": automation.seller_text(lead), "buyer_blast": automation.buyer_blast(lead)}
+    o = next((o for o in lead.get("owners") or [] if (o.get("phone") or "").strip()), None)
+    if o:
+        out["seller_sms"] = automation.sms_link(o["phone"], out["seller_text"])
+    em = next((o for o in lead.get("owners") or [] if (o.get("email") or "").strip()), None)
+    if em:
+        out["seller_mail"] = automation.mail_link(em["email"], f"About {lead.get('address', 'your property')}", out["seller_text"])
+    return out
 
 
 @app.post("/leads/new")
@@ -140,6 +173,8 @@ def create_lead(
     asking_price: str = Form(""), tags: str = Form(""), motivation: str = Form(""),
     source: str = Form("manual"),
 ):
+    if not motivation:
+        motivation, _ = automation.classify(f"{address} {tags}")
     lead = db.add_lead({
         "address": address, "city": city, "postal": postal, "source": source,
         "owner_name": owner_name, "owner_phone": owner_phone, "owner_email": owner_email,
@@ -151,12 +186,27 @@ def create_lead(
 @app.post("/leads/{lead_id}/stage")
 def change_stage(lead_id: int, to_stage: str = Form(...)):
     db.move_stage(lead_id, to_stage)
+    _safe(db.close_tasks_for_lead, lead_id, ("call_seller", "find_contact") if to_stage != "new" else ())
+    if to_stage in ("closed_won", "closed_lost"):
+        _safe(db.close_tasks_for_lead, lead_id, ("call_seller", "find_contact", "analyze", "blast_buyers", "review_stale"))
     return RedirectResponse(f"/leads/{lead_id}", status_code=303)
+
+
+def _safe(fn, *a):
+    try:
+        fn(*a)
+    except Exception:
+        log.exception("automation side effect failed: %s", getattr(fn, "__name__", fn))
 
 
 @app.post("/leads/{lead_id}/calls")
 def add_call(lead_id: int, outcome: str = Form(...), notes: str = Form(""), duration_min: int = Form(0)):
     db.log_call(lead_id, outcome, notes, duration_min)
+    _safe(db.close_tasks_for_lead, lead_id, ("call_seller", "review_stale"))
+    # a call satisfies an automatic follow-up reminder; manual reminders stay until changed
+    lead = db.get_lead(lead_id) or {}
+    if (lead.get("followup_note") or "").startswith("Auto:"):
+        _safe(db.set_followup, lead_id, "", "")
     return RedirectResponse(f"/leads/{lead_id}", status_code=303)
 
 
@@ -185,6 +235,7 @@ def analyzer_page(request: Request, lead_id: int = 0):
                 "asking": lead.get("asking_price") or "",
                 "repairs": lead.get("repair_estimate") or "",
                 "address": lead.get("address") or "",
+                "lead_id": lead_id,
             }
     return templates.TemplateResponse(request, "analyzer.html", ctx(
         request, prefill=prefill, result=None, fmt=deal_analyzer.fmt))
@@ -198,9 +249,17 @@ def analyzer_run(
     desired_fee: str = Form("10000"), address: str = Form(""),
 ):
     result = deal_analyzer.analyze(arv, asking, repairs, closing_costs, holding_costs, desired_fee)
+    lead_id = int(request.query_params.get("lead_id") or 0)
+    if lead_id and deal_analyzer.parse_money(arv):
+        # remember the numbers on the lead so scoring, buyer matching and the queue use them
+        _safe(db.update_lead_fields, lead_id, {k: v for k, v in {
+            "arv_estimate": deal_analyzer.parse_money(arv) or None,
+            "repair_estimate": deal_analyzer.parse_money(repairs) or None,
+            "asking_price": deal_analyzer.parse_money(asking) or None}.items() if v})
+        _safe(db.close_tasks_for_lead, lead_id, ("analyze",))
     prefill = {"arv": arv, "asking": asking, "repairs": repairs,
                "closing_costs": closing_costs, "holding_costs": holding_costs,
-               "desired_fee": desired_fee, "address": address}
+               "desired_fee": desired_fee, "address": address, "lead_id": lead_id}
     return templates.TemplateResponse(request, "analyzer.html", ctx(
         request, prefill=prefill, result=result, fmt=deal_analyzer.fmt))
 
@@ -288,14 +347,7 @@ async def run_scraper_endpoint(request: Request, name: str):
         found = run_scraper(name, **{k: v for k, v in form.items()})
     except Exception as e:
         return {"ok": False, "error": str(e)}
-    added = 0
-    seen_urls = {l.get("source_url") for l in db.list_leads() if l.get("source_url")}
-    for l in found:
-        if l.get("address") and l.get("source_url") not in seen_urls:
-            db.add_lead(l)
-            added += 1
-            if l.get("source_url"):
-                seen_urls.add(l["source_url"])
+    automation.ingest(found)   # de-dupes by URL and address, auto-tags deal type
     return RedirectResponse("/leads?stage=new", status_code=303)
 
 
@@ -370,20 +422,75 @@ def contact_buyer(lead_id: int, buyer_id: int, channel: str = Form("call")):
     return RedirectResponse(f"/leads/{lead_id}", status_code=303)
 
 
-# ---------- built-in fallback scheduler (no-Docker mode) ----------
+# ---------------- Automation ----------------
+
+@app.get("/automation", response_class=HTMLResponse)
+def automation_page(request: Request, ran: str = ""):
+    return templates.TemplateResponse(request, "automation.html", ctx(
+        request, runs=db.list_runs(15), digest=automation.digest(), tasks_ready=db.tasks_ready(),
+        interval=_interval_h(), enabled=_scheduler_on(), cron_set=bool(os.environ.get("CRON_SECRET")),
+        sources=automation.AUTO_SOURCES, ran=ran))
+
+
+@app.post("/automation/run")
+def automation_run_now(scrape: str = Form("1")):
+    s = automation.run_cycle("manual", scrape=scrape == "1")
+    return RedirectResponse("/automation?ran=1" if "skipped" not in s else "/automation?ran=busy", status_code=303)
+
+
+@app.post("/tasks/{task_id}/done")
+def task_done(task_id: int, back: str = Form("/")):
+    db.set_task_status(task_id, "done")
+    return RedirectResponse(back if back.startswith("/") else "/", status_code=303)
+
+
+@app.post("/tasks/{task_id}/dismiss")
+def task_dismiss(task_id: int, back: str = Form("/")):
+    db.set_task_status(task_id, "dismissed")
+    return RedirectResponse(back if back.startswith("/") else "/", status_code=303)
+
+
+@app.post("/cron/run")
+async def cron_run(request: Request):
+    """External trigger (GitHub Actions / n8n / any cron). Needs the CRON_SECRET."""
+    secret = os.environ.get("CRON_SECRET", "")
+    given = request.headers.get("x-cron-secret") or request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    if not secret or given != secret:
+        return JSONResponse({"ok": False, "error": "forbidden"}, status_code=403)
+    summary = await run_in_threadpool(automation.run_cycle, "cron")
+    return {"ok": True, "summary": summary}
+
+
+@app.get("/api/digest")
+def api_digest():
+    d = automation.digest()
+    return {"ok": True, **d}
+
+
+# ---------- built-in scheduler (on by default; the app runs the automation itself) ----------
+
+def _interval_h() -> float:
+    try:
+        return max(0.5, float(os.environ.get("AUTOMATION_INTERVAL_HOURS") or os.environ.get("SCRAPE_INTERVAL_HOURS") or 6))
+    except ValueError:
+        return 6.0
+
+
+def _scheduler_on() -> bool:
+    # new name AUTOMATION, old name ENABLE_SCHEDULER; default on
+    v = os.environ.get("AUTOMATION", os.environ.get("ENABLE_SCHEDULER", "1"))
+    return v not in ("0", "false", "off", "")
+
 
 def _scheduler_loop():
-    interval_h = float(os.environ.get("SCRAPE_INTERVAL_HOURS", "24"))
+    time.sleep(90)  # let the app finish booting
     while True:
-        time.sleep(interval_h * 3600)
-        for name in ("craigslist_winnipeg", "kijiji_winnipeg"):
-            try:
-                for l in run_scraper(name):
-                    if l.get("address"):
-                        db.add_lead(l)
-            except Exception:
-                pass  # scheduler never crashes the app
+        try:
+            automation.run_cycle("scheduler")
+        except Exception:
+            log.exception("scheduled automation failed")  # scheduler never crashes the app
+        time.sleep(_interval_h() * 3600)
 
 
-if os.environ.get("ENABLE_SCHEDULER", "0") == "1":
-    threading.Thread(target=_scheduler_loop, daemon=True).start()
+if _scheduler_on() and not os.environ.get("VERCEL") and not os.environ.get("PYTEST_CURRENT_TEST") and "pytest" not in os.sys.modules:
+    threading.Thread(target=_scheduler_loop, daemon=True, name="automation").start()

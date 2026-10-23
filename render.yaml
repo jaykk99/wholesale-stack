@@ -13,3 +13,9 @@ services:
         sync: false
       - key: WHOLESALE_BUYER_COMPANY
         sync: false
+      - key: AUTOMATION
+        value: "1"
+      - key: AUTOMATION_INTERVAL_HOURS
+        value: "6"
+      - key: CRON_SECRET
+        generateValue: true

@@ -28,6 +28,8 @@ T_STAGE_HISTORY = _P + "stage_history"
 T_CONTRACTS = _P + "contracts"
 T_BUYERS = _P + "buyers"
 T_BUYER_OUTREACH = _P + "buyer_outreach"
+T_TASKS = _P + "tasks"
+T_RUNS = _P + "automation_runs"
 
 SQLITE_PATH = os.environ.get("SQLITE_PATH", os.path.join(os.path.dirname(__file__), "..", "wholesale.db"))
 
@@ -172,6 +174,15 @@ CREATE TABLE IF NOT EXISTS buyer_outreach (
   id INTEGER PRIMARY KEY AUTOINCREMENT, lead_id INTEGER NOT NULL,
   buyer_id INTEGER NOT NULL, channel TEXT DEFAULT 'call', contacted_at REAL
 );
+CREATE TABLE IF NOT EXISTS tasks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, lead_id INTEGER, kind TEXT NOT NULL,
+  title TEXT NOT NULL, detail TEXT DEFAULT '', priority INTEGER DEFAULT 50,
+  status TEXT DEFAULT 'open', due TEXT, created_at REAL, done_at REAL
+);
+CREATE TABLE IF NOT EXISTS automation_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, started_at REAL, finished_at REAL,
+  trigger TEXT DEFAULT 'manual', summary_json TEXT DEFAULT '{}', ok INTEGER DEFAULT 1
+);
 """
 
 
@@ -204,15 +215,36 @@ def _now() -> float | str:
     return time.time()
 
 
+def ts_of(v: Any) -> float:
+    """Epoch seconds from a SQLite float or a Supabase ISO timestamp (0 if unknown)."""
+    if v in (None, ""):
+        return 0.0
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        pass
+    try:
+        from datetime import datetime
+        return datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return 0.0
+
+
 # ---------------- Unified API ----------------
 
 def list_leads() -> list[dict]:
     if USE_SUPABASE:
+        # 3 requests total (was 2 + one per lead, which timed the dashboard out on big lists)
         leads = sb_get(T_LEADS, {"order": "updated_at.desc"})
         deals = {d["lead_id"]: d for d in sb_get(T_DEALS)}
+        owners: dict[int, list] = {}
+        for o in sb_get(T_OWNERS):
+            owners.setdefault(o["lead_id"], []).append(o)
         for l in leads:
-            l["stage"] = deals.get(l["id"], {}).get("stage", "new")
-            l["owners"] = sb_get(T_OWNERS, {"lead_id": f"eq.{l['id']}"})
+            d = deals.get(l["id"], {})
+            l["stage"] = d.get("stage", "new")
+            l["offer_amount"] = d.get("offer_amount")
+            l["owners"] = owners.get(l["id"], [])
         return leads
     conn = _lite()
     rows = conn.execute(
@@ -221,8 +253,11 @@ def list_leads() -> list[dict]:
            ORDER BY l.updated_at DESC"""
     ).fetchall()
     leads = [dict(r) for r in rows]
+    owners: dict[int, list] = {}
+    for r in conn.execute("SELECT * FROM owners"):
+        owners.setdefault(r["lead_id"], []).append(dict(r))
     for l in leads:
-        l["owners"] = [dict(r) for r in conn.execute("SELECT * FROM owners WHERE lead_id=?", (l["id"],))]
+        l["owners"] = owners.get(l["id"], [])
     conn.close()
     return leads
 
@@ -380,8 +415,9 @@ def set_followup(lead_id: int, date_iso: str, note: str = "") -> dict | None:
         raise ValueError("follow-up date must be YYYY-MM-DD")
     note = (note or "").strip()[:500]
     if USE_SUPABASE:
-        sb_patch(T_LEADS, {"id": f"eq.{lead_id}"},
-                 {"next_followup": date_iso or None, "followup_note": note})
+        # sb_patch adds the "eq." itself (passing "eq.N" here sent eq.eq.N and silently matched nothing)
+        sb_patch(T_LEADS, {"id": lead_id},
+                 {"next_followup": date_iso or None, "followup_note": note, "updated_at": _now()})
     else:
         conn = _lite()
         conn.execute("UPDATE leads SET next_followup=?, followup_note=?, updated_at=? WHERE id=?",
@@ -454,13 +490,10 @@ def lead_score(lead: dict) -> dict:
         if pts:
             reasons.append(f"stage {stage} (+{pts})")
     # stale: no update in 21+ days
-    try:
-        updated = float(lead.get("updated_at") or 0)
-        if updated and (time.time() - updated) > 21 * 86400:
-            score -= 10
-            reasons.append("stale 21+ days (-10)")
-    except (TypeError, ValueError):
-        pass
+    updated = ts_of(lead.get("updated_at"))   # works for SQLite floats and Supabase ISO strings
+    if updated and (time.time() - updated) > 21 * 86400:
+        score -= 10
+        reasons.append("stale 21+ days (-10)")
     score = max(0, min(100, score))
     if score >= 70:
         band = "hot"
@@ -534,13 +567,28 @@ def list_all_contracts() -> list[dict]:
             r["fields"] = json.loads(r.get("fields_json") or "{}")
         except Exception:
             r["fields"] = {}
-        # attach lead name for display
-        try:
-            lead = get_lead(r["lead_id"])
-            r["lead_name"] = (lead or {}).get("address") or f"Lead {r['lead_id']}"
-        except Exception:
-            r["lead_name"] = f"Lead {r['lead_id']}"
+    # attach lead names for display (one lookup for all rows, not one per contract)
+    names = lead_addresses([r["lead_id"] for r in rows])
+    for r in rows:
+        r["lead_name"] = names.get(r["lead_id"]) or f"Lead {r['lead_id']}"
     return rows
+
+
+def lead_addresses(ids: list[int]) -> dict[int, str]:
+    ids = sorted({int(i) for i in ids if i is not None})
+    if not ids:
+        return {}
+    try:
+        if USE_SUPABASE:
+            rows = sb_get(T_LEADS, {"id": f"in.({','.join(map(str, ids))})", "select": "id,address"})
+        else:
+            conn = _lite()
+            q = f"SELECT id, address FROM leads WHERE id IN ({','.join('?' * len(ids))})"
+            rows = [dict(r) for r in conn.execute(q, ids)]
+            conn.close()
+    except Exception:
+        return {}
+    return {r["id"]: r.get("address") or "" for r in rows}
 
 
 # ---------------- Buyers CRM ----------------
@@ -789,3 +837,183 @@ def buyer_outreach_for_lead(lead_id: int) -> dict[int, list[dict]]:
     for r in rows:
         grouped.setdefault(r["buyer_id"], []).append(r)
     return grouped
+
+
+# ---------------- Automation: lead edits, call history, task queue, run log ----------------
+
+def update_lead_fields(lead_id: int, fields: dict) -> None:
+    """Patch plain lead columns (motivation, tags, arv_estimate, repair_estimate...)."""
+    allowed = {"motivation", "tags", "arv_estimate", "repair_estimate", "asking_price", "postal", "city"}
+    row = {k: v for k, v in fields.items() if k in allowed}
+    if not row:
+        return
+    if USE_SUPABASE:
+        sb_patch(T_LEADS, {"id": lead_id}, row)
+        return
+    conn = _lite()
+    sets = ", ".join(f"{k}=?" for k in row)
+    conn.execute(f"UPDATE leads SET {sets} WHERE id=?", (*row.values(), lead_id))
+    conn.commit()
+    conn.close()
+
+
+def calls_by_lead() -> dict[int, list[dict]]:
+    """Every logged call grouped by lead, newest first (one query)."""
+    if USE_SUPABASE:
+        rows = sb_get(T_CALLS, {"order": "called_at.desc"})
+    else:
+        conn = _lite()
+        rows = [dict(r) for r in conn.execute("SELECT * FROM calls ORDER BY called_at DESC")]
+        conn.close()
+    out: dict[int, list[dict]] = {}
+    for r in rows:
+        out.setdefault(r["lead_id"], []).append(r)
+    return out
+
+
+def outreach_by_lead() -> dict[int, int]:
+    """How many buyer contacts each lead has had (one query)."""
+    if not buyers_ready():
+        return {}
+    try:
+        if USE_SUPABASE:
+            rows = sb_get(T_BUYER_OUTREACH, {"select": "lead_id"})
+        else:
+            conn = _lite()
+            rows = [dict(r) for r in conn.execute("SELECT lead_id FROM buyer_outreach")]
+            conn.close()
+    except Exception:
+        return {}
+    out: dict[int, int] = {}
+    for r in rows:
+        out[r["lead_id"]] = out.get(r["lead_id"], 0) + 1
+    return out
+
+
+_tasks_ready: bool | None = None
+
+
+def tasks_ready() -> bool:
+    """True when the task/run tables exist (Supabase: migration 0004 applied). Cached once True."""
+    global _tasks_ready
+    if _tasks_ready:
+        return True
+    if not USE_SUPABASE:
+        _tasks_ready = True
+        return True
+    try:
+        sb_get(T_TASKS, {"limit": "1"})
+        _tasks_ready = True
+    except Exception:
+        _tasks_ready = False
+    return bool(_tasks_ready)
+
+
+def list_tasks(status: str = "open", limit: int = 200) -> list[dict]:
+    if not tasks_ready():
+        return []
+    if USE_SUPABASE:
+        try:
+            return sb_get(T_TASKS, {"status": f"eq.{status}", "order": "priority.desc,created_at.asc", "limit": str(limit)})
+        except Exception:
+            return []
+    conn = _lite()
+    rows = [dict(r) for r in conn.execute(
+        "SELECT * FROM tasks WHERE status=? ORDER BY priority DESC, created_at ASC LIMIT ?", (status, limit))]
+    conn.close()
+    return rows
+
+
+def add_task(lead_id: int | None, kind: str, title: str, detail: str = "", priority: int = 50,
+             due: str | None = None) -> dict | None:
+    """Queue a task unless the same (lead, kind) is already open. Returns the new task or None."""
+    if not tasks_ready():
+        return None
+    for t in list_tasks("open", 1000):
+        if t.get("lead_id") == lead_id and t.get("kind") == kind:
+            return None
+    row = {"lead_id": lead_id, "kind": kind, "title": title[:200], "detail": detail[:1000],
+           "priority": int(priority), "status": "open", "due": due, "created_at": _now()}
+    if USE_SUPABASE:
+        return sb_post(T_TASKS, row)
+    conn = _lite()
+    cur = conn.execute("INSERT INTO tasks (lead_id, kind, title, detail, priority, status, due, created_at) VALUES (?,?,?,?,?,?,?,?)",
+                       (lead_id, kind, row["title"], row["detail"], row["priority"], "open", due, row["created_at"]))
+    row["id"] = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return row
+
+
+def set_task_status(task_id: int, status: str) -> None:
+    if status not in ("open", "done", "dismissed") or not tasks_ready():
+        return
+    if USE_SUPABASE:
+        sb_patch(T_TASKS, {"id": task_id}, {"status": status, "done_at": _now() if status != "open" else None})
+        return
+    conn = _lite()
+    conn.execute("UPDATE tasks SET status=?, done_at=? WHERE id=?", (status, time.time() if status != "open" else None, task_id))
+    conn.commit()
+    conn.close()
+
+
+def close_tasks_for_lead(lead_id: int, kinds: tuple[str, ...]) -> None:
+    """Auto-complete open tasks a user action just satisfied (e.g. logging a call closes call_seller)."""
+    for t in list_tasks("open", 1000):
+        if t.get("lead_id") == lead_id and t.get("kind") in kinds:
+            set_task_status(t["id"], "done")
+
+
+def log_run(started: float, trigger: str, summary: dict, ok: bool = True) -> None:
+    if not tasks_ready():
+        return
+    payload = json.dumps(summary, default=str)
+    if USE_SUPABASE:
+        from datetime import datetime, timezone
+        iso = lambda t: datetime.fromtimestamp(t, timezone.utc).isoformat()
+        try:
+            sb_post(T_RUNS, {"started_at": iso(started), "finished_at": iso(time.time()), "trigger": trigger,
+                             "summary_json": payload, "ok": ok})
+        except Exception:
+            pass
+        return
+    conn = _lite()
+    conn.execute("INSERT INTO automation_runs (started_at, finished_at, trigger, summary_json, ok) VALUES (?,?,?,?,?)",
+                 (started, time.time(), trigger, payload, 1 if ok else 0))
+    conn.commit()
+    conn.close()
+
+
+def list_runs(limit: int = 20) -> list[dict]:
+    if not tasks_ready():
+        return []
+    try:
+        if USE_SUPABASE:
+            rows = sb_get(T_RUNS, {"order": "started_at.desc", "limit": str(limit)})
+        else:
+            conn = _lite()
+            rows = [dict(r) for r in conn.execute("SELECT * FROM automation_runs ORDER BY started_at DESC LIMIT ?", (limit,))]
+            conn.close()
+    except Exception:
+        return []
+    for r in rows:
+        try:
+            r["summary"] = json.loads(r.get("summary_json") or "{}")
+        except Exception:
+            r["summary"] = {}
+        r["started_ts"] = ts_of(r.get("started_at"))
+        r["when"] = _ago(r["started_ts"])
+    return rows
+
+
+def _ago(ts: float) -> str:
+    if not ts:
+        return "never"
+    d = time.time() - ts
+    if d < 90:
+        return "just now"
+    if d < 3600:
+        return f"{int(d // 60)} min ago"
+    if d < 86400:
+        return f"{int(d // 3600)} h ago"
+    return f"{int(d // 86400)} days ago"
