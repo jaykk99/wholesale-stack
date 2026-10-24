@@ -319,12 +319,18 @@ def digest() -> dict:
     scores = [db.lead_score(l) for l in leads if l.get("stage") in OPEN]
     pipeline_value = sum(max(0, db.payout_estimate(l)["spread"]) for l in leads if l.get("stage") in OPEN)
     runs = db.list_runs(1)
+    try:
+        followups_due = len(db.due_followups())
+    except Exception:
+        # A broken follow-ups query must never 500 the digest / automation page.
+        log.exception("digest: due_followups failed, reporting 0")
+        followups_due = 0
     return {
         "open_leads": len(scores),
         "hot": sum(1 for s in scores if s["band"] == "hot"),
         "warm": sum(1 for s in scores if s["band"] == "warm"),
         "pipeline_spread": round(pipeline_value),
         "open_tasks": len(db.list_tasks("open", 1000)),
-        "followups_due": len(db.due_followups()),
+        "followups_due": followups_due,
         "last_run": runs[0] if runs else None,
     }

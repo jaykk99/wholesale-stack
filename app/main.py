@@ -218,7 +218,12 @@ def add_note(lead_id: int, body: str = Form(...)):
 
 @app.post("/leads/{lead_id}/followup")
 def set_followup(lead_id: int, next_followup: str = Form(""), followup_note: str = Form("")):
-    db.set_followup(lead_id, next_followup, followup_note)
+    try:
+        db.set_followup(lead_id, next_followup, followup_note)
+    except ValueError:
+        # Bad date, or follow-ups not enabled on the DB yet (migration 0003):
+        # back to the lead page either way, never a raw 500.
+        log.exception("set_followup rejected for lead %s", lead_id)
     return RedirectResponse(f"/leads/{lead_id}", status_code=303)
 
 
@@ -388,7 +393,7 @@ def create_buyer(
 
 
 @app.get("/buyers/{buyer_id}", response_class=HTMLResponse)
-def buyer_detail(request: Request, buyer_id: int):
+def buyer_detail(request: Request, buyer_id: str):
     b = db.get_buyer(buyer_id)
     if not b:
         return HTMLResponse("Buyer not found", status_code=404)
@@ -398,7 +403,7 @@ def buyer_detail(request: Request, buyer_id: int):
 
 @app.post("/buyers/{buyer_id}/edit")
 def edit_buyer(
-    buyer_id: int, name: str = Form(...), phone: str = Form(""), email: str = Form(""),
+    buyer_id: str, name: str = Form(...), phone: str = Form(""), email: str = Form(""),
     company: str = Form(""), buyer_type: str = Form("cash_buyer"),
     target_areas: str = Form(""), min_price: str = Form(""), max_price: str = Form(""),
     property_types: str = Form(""), notes: str = Form(""),
@@ -411,13 +416,13 @@ def edit_buyer(
 
 
 @app.post("/buyers/{buyer_id}/delete")
-def remove_buyer(buyer_id: int):
+def remove_buyer(buyer_id: str):
     db.delete_buyer(buyer_id)
     return RedirectResponse("/buyers", status_code=303)
 
 
 @app.post("/leads/{lead_id}/buyers/{buyer_id}/contact")
-def contact_buyer(lead_id: int, buyer_id: int, channel: str = Form("call")):
+def contact_buyer(lead_id: int, buyer_id: str, channel: str = Form("call")):
     db.log_buyer_contact(lead_id, buyer_id, channel)
     return RedirectResponse(f"/leads/{lead_id}", status_code=303)
 

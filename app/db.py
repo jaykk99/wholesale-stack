@@ -416,8 +416,17 @@ def set_followup(lead_id: int, date_iso: str, note: str = "") -> dict | None:
     note = (note or "").strip()[:500]
     if USE_SUPABASE:
         # sb_patch adds the "eq." itself (passing "eq.N" here sent eq.eq.N and silently matched nothing)
-        sb_patch(T_LEADS, {"id": lead_id},
-                 {"next_followup": date_iso or None, "followup_note": note, "updated_at": _now()})
+        try:
+            sb_patch(T_LEADS, {"id": lead_id},
+                     {"next_followup": date_iso or None, "followup_note": note, "updated_at": _now()})
+        except httpx.HTTPStatusError as e:
+            # Migration 0003 not applied yet (ws_leads has no follow-up columns):
+            # PostgREST 400s. Surface a clear, catchable error instead of a raw 500.
+            import logging
+            logging.getLogger("wholesale.db").warning(
+                "set_followup failed for lead %s (HTTP %s) - is migration 0003 applied?",
+                lead_id, e.response.status_code if e.response is not None else "?")
+            raise ValueError("Follow-up reminders are not enabled on this database yet.") from e
     else:
         conn = _lite()
         conn.execute("UPDATE leads SET next_followup=?, followup_note=?, updated_at=? WHERE id=?",
@@ -431,7 +440,20 @@ def due_followups() -> list[dict]:
     """Leads with a follow-up date of today or earlier, excluding closed deals."""
     if USE_SUPABASE:
         from datetime import date
-        leads = sb_get(T_LEADS, {"next_followup": f"lte.{date.today().isoformat()}"})
+        today = date.today().isoformat()
+        try:
+            leads = sb_get(T_LEADS, {"next_followup": f"lte.{today}"})
+        except Exception:
+            # Migration 0003 not applied yet (no next_followup column): PostgREST
+            # 400s on the filter and one missing column used to take down the
+            # dashboard, /automation and /api/digest. Degrade to a client-side
+            # filter over the unfiltered rows (the key is simply absent until
+            # the migration lands, so this returns the same result).
+            import logging
+            logging.getLogger("wholesale.db").warning(
+                "due_followups: filtered query failed, falling back to client-side filter")
+            leads = [l for l in sb_get(T_LEADS)
+                     if (l.get("next_followup") or "") and l["next_followup"] <= today]
         deals = {d["lead_id"]: d for d in sb_get(T_DEALS)}
         out = []
         for l in leads:
@@ -635,7 +657,10 @@ def list_buyers() -> list[dict]:
     return rows
 
 
-def get_buyer(buyer_id: int) -> dict | None:
+# NOTE: buyer ids are passed through untouched - the live Supabase ws_buyers
+# table uses UUID primary keys while local SQLite uses integers. Never
+# coerce a buyer id to int (that 422'd every buyer page in production).
+def get_buyer(buyer_id) -> dict | None:
     if not buyers_ready():
         return None
     if USE_SUPABASE:
@@ -682,7 +707,7 @@ def add_buyer(data: dict) -> dict | None:
     return get_buyer(bid)
 
 
-def update_buyer(buyer_id: int, data: dict) -> dict | None:
+def update_buyer(buyer_id, data: dict) -> dict | None:
     if not buyers_ready():
         return None
     row = {
@@ -714,7 +739,7 @@ def update_buyer(buyer_id: int, data: dict) -> dict | None:
     return get_buyer(buyer_id)
 
 
-def delete_buyer(buyer_id: int) -> None:
+def delete_buyer(buyer_id) -> None:
     if not buyers_ready():
         return
     if USE_SUPABASE:
@@ -800,7 +825,7 @@ def match_buyers(lead: dict) -> list[dict]:
     return out
 
 
-def log_buyer_contact(lead_id: int, buyer_id: int, channel: str = "call") -> dict | None:
+def log_buyer_contact(lead_id: int, buyer_id, channel: str = "call") -> dict | None:
     if not buyers_ready():
         return None
     row = {"lead_id": lead_id, "buyer_id": buyer_id, "channel": channel, "contacted_at": _now()}
