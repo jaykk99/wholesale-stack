@@ -2,7 +2,7 @@
 
 ## Live URL
 
-https://wholesale-stack.onrender.com
+Currently suspended on Render (no live host yet).
 
 A wholesaling CRM for closing real estate deals from your phone. Lead scraping, pipeline tracking, call scripts, fillable contracts, and n8n automation, all in one place.
 
