@@ -1,0 +1,18 @@
+# Wholesale Stack crypto checkout - Cloudflare Worker + D1 + cron sweep.
+# DO NOT put PAYWATCH_CRON_SECRET here. If you want owner manual
+# approval gated, set it as a secret:
+#   wrangler secret put PAYWATCH_CRON_SECRET
+# Plans: set PAYWATCH_PLANS_JSON as a plain variable here or in the
+# dashboard to replace the shipped PLACEHOLDER tiers with real pricing.
+# After `wrangler d1 create wholesale-checkout`, paste its database_id below.
+name = "wholesale-crypto-checkout"
+compatibility_date = "2026-10-28"
+main = "src/worker.js"
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wholesale-checkout"
+database_id = "REPLACE_WITH_D1_DATABASE_ID_FROM_WRANGLER_D1_CREATE"

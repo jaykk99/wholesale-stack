@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Crypto Checkout - Wholesale Deals{% endblock %}
+{% block content %}
+<h1>Crypto checkout</h1>
+<p>Pay in crypto from your own wallet. No wallet connection, no signing,
+no card. You declare the address you will send from, pay the pinned
+amount to the receive address shown, and the plan unlocks after the
+asset confirmation rule inside a 60 minute window. At least 99 percent
+of the pinned amount must arrive, from the address you declared.
+Late, underpaid, or reused payments do not auto unlock.</p>
+
+{% if placeholder %}
+<div style="border:2px solid #b00;padding:12px;margin:12px 0">
+  <strong>Pricing is not set yet.</strong>
+  The plans below are placeholders in <code>paywatch_plans.json</code>.
+  The owner must set real names and prices in that file before anyone
+  pays. Do not send crypto for a placeholder plan.
+</div>
+{% endif %}
+
+<h2>Plans</h2>
+{% for p in plans %}
+<div style="border:1px solid #888;padding:12px;margin:8px 0">
+  <strong>{{ p.name }}</strong><br>
+  {% if placeholder %}
+  <span>Price: not set yet (placeholder plan)</span>
+  {% else %}
+  <span>Price: ${{ "%.2f"|format(p.price_usd) }} USD, pinned in crypto at checkout</span>
+  {% endif %}
+</div>
+{% endfor %}
+
+<h2>Assets</h2>
+<ul>
+{% for a in assets %}
+  <li>{{ a.symbol }} ({{ a.name }}): {{ a.confirmations }} confirmation rule,
+  pool of {{ a.pool_size }} receive address{{ "es" if a.pool_size != 1 }}
+  {% if a.pool_size == 0 %} - checkout closed for this asset{% endif %}</li>
+{% endfor %}
+</ul>
+<p>BNB note: the public BNB explorer currently fails, so BNB checkouts
+refuse honestly with a too busy message until a working explorer is
+configured. BTC, ETH, and SOL are the live assets.</p>
+
+<h2>Start a payment</h2>
+<form id="payForm">
+  <label>Plan
+    <select id="plan_id">
+      {% for p in plans %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+    </select>
+  </label><br><br>
+  <label>Asset
+    <select id="asset">
+      {% for a in assets %}<option value="{{ a.key }}">{{ a.symbol }}</option>{% endfor %}
+    </select>
+  </label><br><br>
+  <label>Your sending address (you must send from exactly this address)<br>
+    <input id="payer_address" size="48" required>
+  </label><br><br>
+  <label>Reference (optional, for example lead:12)<br>
+    <input id="buyer_ref" size="24">
+  </label><br><br>
+  <button type="submit">Create invoice</button>
+</form>
+<pre id="out" style="white-space:pre-wrap"></pre>
+<button id="checkBtn" style="display:none">Check payment</button>
+
+<script>
+let currentOrder = null;
+const out = document.getElementById('out');
+document.getElementById('payForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  out.textContent = 'Creating invoice...';
+  const res = await fetch('/api/crypto/orders', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      plan_id: document.getElementById('plan_id').value,
+      asset: document.getElementById('asset').value,
+      payer_address: document.getElementById('payer_address').value,
+      buyer_ref: document.getElementById('buyer_ref').value,
+    })});
+  const data = await res.json();
+  if (!res.ok) { out.textContent = 'Error: ' + (data.error || res.status); return; }
+  currentOrder = data;
+  out.textContent = 'Send exactly this amount to the receive address:\n' +
+    'Amount (smallest unit): ' + data.expected_amount + '\n' +
+    'Receive address: ' + data.receive_address + '\n' +
+    'Expires at: ' + data.expires_at + '\nStatus: ' + data.status;
+  document.getElementById('checkBtn').style.display = 'inline';
+});
+document.getElementById('checkBtn').addEventListener('click', async () => {
+  if (!currentOrder) return;
+  const res = await fetch('/api/crypto/orders/' + currentOrder.id + '/check', {method: 'POST'});
+  const data = await res.json();
+  out.textContent = JSON.stringify(data, null, 2);
+});
+</script>
+{% endblock %}

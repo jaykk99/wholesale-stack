@@ -16,7 +16,8 @@ A wholesaling CRM for closing real estate deals from your phone. Lead scraping, 
 - **Lead scoring**: every lead gets a 0-100 hot/warm/cold score (motivation + spread + phone + stage progress - stale penalty); `/leads?sort=score` sorts hottest first.
 - **Follow-up reminders**: set a date + note on any lead; overdue follow-ups surface on the dashboard.
 - **Automation**: docker-compose bundles n8n (Community Edition) with two example workflows (daily scrape to CRM, stale-lead follow-up reminders). No-Docker fallback: the app has its own tiny scheduler (`ENABLE_SCHEDULER=1`).
-- **Tests**: `python3 -m pytest tests/` — 47 tests (access gate, crash reporting, analyzer math, payout, scoring, follow-ups, buyer matching, exit strategies).
+- **Crypto checkout** (`/checkout`, `app/crypto_checkout.py`, vendored `paywatch/` from jaykk99/crypto-payment-watcher): buyers pay in BTC, ETH, BNB, or SOL from their own wallet. Price pinned at invoice creation, buyer declares their sending address, 60 minute window, 1 percent tolerance, per-asset confirmations (BTC 2, ETH 12, BNB 15, SOL finalized), single-use transaction ids, and a per-asset too busy state when chain or price providers are down. When a payment unlocks, an entitlement row is recorded (and a note is added when the reference is `lead:<id>`). Plans live in `paywatch_plans.json`, which ships PLACEHOLDER tiers only: Wholesale Stack has no real crypto pricing yet, so the owner must set real names and prices there before selling. A standalone Cloudflare Worker version of the same checkout lives in `cloudflare-checkout/` (D1 invoices, cron sweep, dashboard-paste bundle in `cloudflare-checkout/dist-dashboard/`).
+- **Tests**: `python3 -m pytest tests/` (access gate, crash reporting, analyzer math, payout, scoring, follow-ups, buyer matching, exit strategies, crypto checkout routes).
 
 ## Lead sources (honest status, tested 2026-10-14)
 

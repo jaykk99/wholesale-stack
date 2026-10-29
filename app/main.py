@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from . import db
+from . import crypto_checkout
 from . import analyzer as deal_analyzer
 from . import automation, call_scripts, contracts, error_report, exits, training_md
 from .scrapers import SCRAPERS, run_scraper
@@ -398,6 +399,112 @@ async def run_scraper_endpoint(request: Request, name: str):
 @app.get("/health")
 def health():
     return {"ok": True, "backend": db.backend_name(), "scrapers": list(SCRAPERS.keys())}
+
+
+# ---------------- Crypto checkout (vendored paywatch) ----------------
+
+def _crypto_watcher():
+    return crypto_checkout.get_watcher()
+
+
+def _crypto_error(exc):
+    return JSONResponse(crypto_checkout.watcher_error_payload(exc),
+                        status_code=getattr(exc, "status_code", 400))
+
+
+@app.get("/checkout", response_class=HTMLResponse)
+def checkout_page(request: Request):
+    watcher = _crypto_watcher()
+    plans = [p.as_dict() for p in watcher.plans.values()]
+    assets = []
+    try:
+        import sys
+        if BASE_DIR not in sys.path:
+            sys.path.insert(0, BASE_DIR)
+        from paywatch.assets import get_asset, supported_assets
+        for key in supported_assets():
+            spec = get_asset(key)
+            assets.append({"key": key, "symbol": spec.symbol,
+                           "name": spec.display_name,
+                           "confirmations": spec.default_confirmations,
+                           "pool_size": len(watcher.pool_for(key))})
+    except Exception:
+        log.exception("checkout page: asset registry failed")
+    return templates.TemplateResponse(request, "checkout.html", ctx(
+        request, plans=plans, assets=assets,
+        placeholder=crypto_checkout.plans_are_placeholder(watcher.plans)))
+
+
+@app.get("/api/crypto/plans")
+def api_crypto_plans():
+    watcher = _crypto_watcher()
+    return {
+        "plans": [p.as_dict() for p in watcher.plans.values()],
+        "placeholder_pricing": crypto_checkout.plans_are_placeholder(watcher.plans),
+        "assets": [{"asset": key, "pool_size": len(watcher.pool_for(key))}
+                   for key in ("btc", "eth", "bnb", "sol")],
+        "invoice_minutes": 60, "tolerance_pct": 1.0,
+    }
+
+
+@app.get("/api/crypto/assets")
+def api_crypto_assets():
+    # Live availability: probes price and chain providers per asset.
+    return {"assets": _crypto_watcher().asset_statuses()}
+
+
+@app.post("/api/crypto/orders")
+async def api_crypto_create_order(request: Request):
+    from paywatch.watcher import WatcherError
+    body = await request.json()
+    try:
+        order = _crypto_watcher().create_order(
+            body["plan_id"], body["payer_address"],
+            buyer_ref=body.get("buyer_ref", ""),
+            asset=body.get("asset", "btc"))
+    except WatcherError as exc:
+        return _crypto_error(exc)
+    except KeyError as exc:
+        return JSONResponse({"error": f"missing field: {exc}"}, status_code=400)
+    return order.public()
+
+
+@app.get("/api/crypto/orders/{order_id}")
+def api_crypto_get_order(order_id: str):
+    order = _crypto_watcher().get_order(order_id)
+    if order is None:
+        return JSONResponse({"error": f"unknown order: {order_id}"}, status_code=404)
+    return order.public()
+
+
+@app.post("/api/crypto/orders/{order_id}/check")
+def api_crypto_check_order(order_id: str):
+    from paywatch.watcher import WatcherError
+    try:
+        return _crypto_watcher().check_order(order_id)
+    except WatcherError as exc:
+        return _crypto_error(exc)
+
+
+@app.post("/api/crypto/orders/{order_id}/approve")
+async def api_crypto_approve_order(request: Request, order_id: str):
+    from paywatch.watcher import WatcherError
+    body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+    try:
+        return _crypto_watcher().approve_order(
+            order_id, owner_secret=(body or {}).get("owner_secret"))
+    except WatcherError as exc:
+        return _crypto_error(exc)
+
+
+@app.post("/api/crypto/sweep")
+def api_crypto_sweep():
+    return _crypto_watcher().sweep()
+
+
+@app.get("/api/crypto/entitlements")
+def api_crypto_entitlements():
+    return {"entitlements": crypto_checkout.list_entitlements()}
 
 
 # ---------------- Buyers CRM ----------------

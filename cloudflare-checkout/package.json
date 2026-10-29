@@ -1,0 +1,1 @@
+{"name":"wholesale-crypto-checkout","private":true,"scripts":{"build-bundle":"node dist-dashboard/build.mjs","test":"node --test tests/*.test.mjs","verify-bundle":"node dist-dashboard/verify_bundle.mjs"},"type":"module"}
