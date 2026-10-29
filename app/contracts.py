@@ -3,6 +3,7 @@
 Template only, not legal advice. Have a local real estate attorney review
 every document before use.
 """
+import html as _html
 import os
 from string import Template
 
@@ -578,5 +579,17 @@ def autofill_values(template: dict, lead: dict) -> dict:
 
 
 def render_contract(template: dict, values: dict) -> str:
-    safe = {f["name"]: values.get(f["name"], "") for f in template["fields"]}
+    """Fill a contract template. Every $field is plain text in the template
+    strings above (names, addresses, amounts) -- the surrounding <p>/<strong>
+    markup is the only HTML that belongs here. Values arrive either from a
+    submitted form or from autofill_values(), which in turn pulls from a
+    scraped lead's address/owner fields; a malicious listing title or a
+    stray script tag typed into a field must render as literal text, not
+    execute, when this contract is later opened (this HTML is rendered with
+    Jinja2's |safe, bypassing its own auto-escaping, specifically so this
+    template's own markup renders -- so escaping the values is this
+    function's job, not the template's).
+    """
+    safe = {f["name"]: _html.escape(str(values.get(f["name"], "")))
+            for f in template["fields"]}
     return template["template"].safe_substitute(safe) + DISCLAIMER_HTML
