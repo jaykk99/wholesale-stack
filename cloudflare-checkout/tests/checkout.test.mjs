@@ -204,6 +204,19 @@ test("D1 store roundtrip through the service", async () => {
   assert.equal(ents.length, 1);
 });
 
+test("sweep counts txid_reused instead of dropping it", async () => {
+  const chain = new FakeChain();
+  const svc = makeService(chain);
+  const o1 = await svc.createOrder("starter", PAYER, { asset: "btc" });
+  const o2 = await svc.createOrder("starter", PAYER, { asset: "btc" });
+  chain.txs = [btcTx("tx-shared-1", 100000, o1.receive_address, 3)];
+  assert.equal((await svc.checkOrder(o1.id)).action, "unlocked");
+  assert.equal((await svc.checkOrder(o2.id)).action, "txid_reused");
+  const res = await svc.sweep();
+  assert.equal(res.txid_reused, 1);
+  assert.equal(res.checked, 1);
+});
+
 test("worker routes: plans, create, check, sweep, page", async () => {
   const env = { DB: new FakeD1(), ...ENV };
   // Live providers are not mocked at the worker layer, so exercise the

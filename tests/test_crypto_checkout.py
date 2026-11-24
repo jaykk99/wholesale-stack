@@ -169,3 +169,30 @@ def test_checkout_page_shows_placeholder_warning(client_and_chain):
     assert r.status_code == 200
     assert "Pricing is not set yet" in r.text
     assert "PLACEHOLDER" in r.text
+
+
+def test_create_order_non_json_body_is_400(client_and_chain):
+    client, _chain, _w = client_and_chain
+    r = client.post("/api/crypto/orders", content="not json",
+                    headers={"content-type": "text/plain"})
+    assert r.status_code == 400, r.text
+    r = client.post("/api/crypto/orders", content="[1, 2]",
+                    headers={"content-type": "application/json"})
+    assert r.status_code == 400
+
+
+def test_sweep_counts_txid_reused(client_and_chain):
+    # One tx paying two invoices: the first unlocks, the second is
+    # txid_reused, and the sweep tally must count it (it used to be
+    # silently dropped from the counts).
+    client, chain, _w = client_and_chain
+    o1 = client.post("/api/crypto/orders", json={
+        "plan_id": "starter", "payer_address": PAYER, "asset": "btc"}).json()
+    o2 = client.post("/api/crypto/orders", json={
+        "plan_id": "starter", "payer_address": PAYER, "asset": "btc"}).json()
+    chain.txs = [btc_tx("tx-shared-1", 100_000, o1["receive_address"])]
+    assert client.post(f"/api/crypto/orders/{o1['id']}/check").json()["action"] == "unlocked"
+    assert client.post(f"/api/crypto/orders/{o2['id']}/check").json()["action"] == "txid_reused"
+    res = client.post("/api/crypto/sweep").json()
+    assert res["txid_reused"] == 1, res
+    assert res["checked"] == 1

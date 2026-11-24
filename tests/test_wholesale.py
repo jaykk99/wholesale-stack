@@ -158,6 +158,18 @@ def test_followup_bad_date_rejected():
         db.set_followup(lead["id"], "not-a-date")
 
 
+def test_followup_impossible_calendar_dates_rejected():
+    # Shape-valid but impossible dates used to be stored as-is; the
+    # string comparison in due_followups() then never made them due,
+    # so the reminder silently never fired.
+    lead = db.add_lead({"address": "2b Test St"})
+    for bad in ("2026-13-45", "2026-02-30", "2026-00-10", "2026-04-31"):
+        with pytest.raises(ValueError):
+            db.set_followup(lead["id"], bad, "x")
+    db.set_followup(lead["id"], "2026-02-28", "real")
+    assert db.get_lead(lead["id"])["next_followup"] == "2026-02-28"
+
+
 def test_closed_leads_excluded_from_due():
     lead = db.add_lead({"address": "3 Test St"})
     db.set_followup(lead["id"], "2000-01-01", "")

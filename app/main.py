@@ -293,7 +293,12 @@ def analyzer_run(
     desired_fee: str = Form("10000"), address: str = Form(""),
 ):
     result = deal_analyzer.analyze(arv, asking, repairs, closing_costs, holding_costs, desired_fee)
-    lead_id = int(request.query_params.get("lead_id") or 0)
+    try:
+        lead_id = int(request.query_params.get("lead_id") or 0)
+    except ValueError:
+        # A non-numeric ?lead_id= used to 500 the whole analysis page;
+        # treat it as "no lead" and still show the numbers.
+        lead_id = 0
     if lead_id and deal_analyzer.parse_money(arv):
         # remember the numbers on the lead so scoring, buyer matching and the queue use them
         _safe(db.update_lead_fields, lead_id, {k: v for k, v in {
@@ -456,7 +461,12 @@ def api_crypto_assets():
 @app.post("/api/crypto/orders")
 async def api_crypto_create_order(request: Request):
     from paywatch.watcher import WatcherError
-    body = await request.json()
+    try:
+        body = await request.json()
+    except ValueError:
+        return JSONResponse({"error": "invalid JSON body"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "JSON body must be an object"}, status_code=400)
     try:
         order = _crypto_watcher().create_order(
             body["plan_id"], body["payer_address"],
@@ -592,13 +602,22 @@ def automation_run_now(scrape: str = Form("1")):
 @app.post("/tasks/{task_id}/done")
 def task_done(task_id: int, back: str = Form("/")):
     db.set_task_status(task_id, "done")
-    return RedirectResponse(back if back.startswith("/") else "/", status_code=303)
+    return RedirectResponse(_safe_back(back), status_code=303)
 
 
 @app.post("/tasks/{task_id}/dismiss")
 def task_dismiss(task_id: int, back: str = Form("/")):
     db.set_task_status(task_id, "dismissed")
-    return RedirectResponse(back if back.startswith("/") else "/", status_code=303)
+    return RedirectResponse(_safe_back(back), status_code=303)
+
+
+def _safe_back(back: str) -> str:
+    """Redirect target after a task action. Local paths only: a value
+    like //evil.com starts with '/' but is a protocol-relative URL,
+    so it would send the user to another site."""
+    if back and back.startswith("/") and not back.startswith("//"):
+        return back
+    return "/"
 
 
 @app.post("/cron/run")

@@ -270,7 +270,7 @@ export class CheckoutService {
   async sweep(now = null) {
     now = now || this.nowFn();
     const counts = { checked: 0, unlocked: 0, confirming: 0, underpaid: 0,
-      pending: 0, expired: 0, paid_late: 0, errors: 0 };
+      pending: 0, expired: 0, paid_late: 0, txid_reused: 0, errors: 0 };
     const providerErrors = [];
     for (const order of await this.store.allOpen()) {
       counts.checked += 1;

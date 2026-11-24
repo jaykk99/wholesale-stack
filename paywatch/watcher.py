@@ -519,7 +519,7 @@ class Watcher:
         now = now or datetime.now(timezone.utc)
         counts = {"checked": 0, "unlocked": 0, "confirming": 0,
                   "underpaid": 0, "pending": 0, "expired": 0,
-                  "paid_late": 0, "errors": 0}
+                  "paid_late": 0, "txid_reused": 0, "errors": 0}
         pools = {asset: pool for asset, pool in self.address_pools.items() if pool}
         if not pools and fetcher is None and not self.chain_fetchers \
                 and self.fetcher is None:

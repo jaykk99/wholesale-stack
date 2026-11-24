@@ -200,3 +200,27 @@ def test_analyzer_saves_numbers_to_lead():
     assert r.status_code == 200
     got = db.get_lead(lead["id"])
     assert got["arv_estimate"] == 250000 and got["repair_estimate"] == 30000
+
+
+def test_task_back_redirect_rejects_protocol_relative_url():
+    # //evil.com starts with '/' but is a protocol-relative URL: the
+    # old check sent the user to another site after a task action.
+    from starlette.testclient import TestClient
+    from app import main
+    c = TestClient(main.app)
+    lead = db.add_lead({"address": "4 Back St"})
+    t = db.add_task(lead["id"], "call_seller", "Call", "", 50)
+    r = c.post(f"/tasks/{t['id']}/dismiss", data={"back": "//evil.com"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/"
+    t2 = db.add_task(lead["id"], "call_seller", "Call again", "", 50)
+    r = c.post(f"/tasks/{t2['id']}/done", data={"back": "/leads"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/leads"
+
+
+def test_analyzer_bad_lead_id_param_does_not_500():
+    from starlette.testclient import TestClient
+    from app import main
+    c = TestClient(main.app, raise_server_exceptions=False)
+    r = c.post("/analyzer?lead_id=abc", data={"arv": "200k", "asking": "150k"})
+    assert r.status_code == 200
+    assert "Maximum allowable offer" in r.text

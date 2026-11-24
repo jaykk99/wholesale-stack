@@ -405,7 +405,17 @@ _FOLLOWUP_RE = None
 
 def _valid_followup_date(s: str) -> bool:
     import re
-    return bool(re.match(r"^\d{4}-\d{2}-\d{2}$", s or ""))
+    from datetime import date
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", s or ""):
+        return False
+    try:
+        # The shape check alone accepts 2026-13-45 and 2026-02-30, which
+        # would sit in the DB forever: string comparison never makes them
+        # due, so the reminder silently never fires.
+        date.fromisoformat(s)
+    except ValueError:
+        return False
+    return True
 
 
 def set_followup(lead_id: int, date_iso: str, note: str = "") -> dict | None:
